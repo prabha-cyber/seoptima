@@ -1,0 +1,191 @@
+import axios from 'axios';
+import robotsParser from 'robots-parser';
+import * as htmlparser2 from 'htmlparser2';
+import * as domutils from 'domutils';
+
+export async function checkRobots(url: string) {
+    try {
+        const urlObj = new URL(url);
+        const robotsUrl = `${urlObj.protocol}//${urlObj.host}/robots.txt`;
+        const response = await axios.get(robotsUrl);
+        const robots = robotsParser(robotsUrl, response.data);
+
+        return {
+            exists: true,
+            sitemaps: robots.getSitemaps(),
+            isAllowed: robots.isAllowed(url, 'Googlebot')
+        };
+    } catch (error) {
+        return { exists: false, error: 'No robots.txt found' };
+    }
+}
+
+export async function checkSitemap(url: string) {
+    try {
+        const urlObj = new URL(url);
+        const sitemapUrl = `${urlObj.protocol}//${urlObj.host}/sitemap.xml`;
+        const response = await axios.get(sitemapUrl);
+        return { exists: true, url: sitemapUrl, size: response.data.length };
+    } catch (error) {
+        return { exists: false };
+    }
+}
+
+export async function analyzeTechnical(html: string, url: string) {
+    const dom = htmlparser2.parseDocument(html);
+
+    const titleNode = domutils.findOne((ele) => ele.name === 'title', dom.children);
+    const metaDescNode = domutils.findOne((ele) => ele.name === 'meta' && ele.attribs.name === 'description', dom.children);
+    const canonicalNode = domutils.findOne((ele) => ele.name === 'link' && ele.attribs.rel === 'canonical', dom.children);
+    const h1Nodes = domutils.findAll((ele) => ele.name === 'h1', dom.children);
+    const h2Nodes = domutils.findAll((ele) => ele.name === 'h2', dom.children);
+    const imgNodes = domutils.findAll((ele) => ele.name === 'img', dom.children);
+    const htmlNode = domutils.findOne((ele) => ele.name === 'html', dom.children);
+    const charsetNode = domutils.findOne((ele) => ele.name === 'meta' && (!!ele.attribs.charset || (ele.attribs.content?.includes('charset'))), dom.children);
+    const faviconNode = domutils.findOne((ele) => ele.name === 'link' && ele.attribs.rel?.includes('icon'), dom.children);
+    const inlineCssNodes = domutils.findAll((ele) => ele.name === 'style' || !!ele.attribs.style, dom.children);
+    const deprecatedNodes = domutils.findAll((ele) => ['font', 'center', 'strike', 'u', 'dir', 'applet', 'marquee'].includes(ele.name), dom.children);
+
+    const title = titleNode ? domutils.textContent(titleNode) : '';
+    const metaDescription = metaDescNode?.attribs.content || '';
+
+    // Extracted Text for basic keyword/word count analysis
+    const textContent = domutils.textContent(dom).replace(/\s+/g, ' ').trim();
+    const wordCount = textContent.split(' ').length;
+
+    let totalImgSize = 0;
+    let responsiveImages = 0;
+    let modernFormatImages = 0;
+
+    imgNodes.forEach(img => {
+        if (img.attribs.srcset || (img.attribs.width && img.attribs.height) || img.attribs.sizes) {
+            responsiveImages++;
+        }
+        if (img.attribs.src?.match(/\.(webp|avif|svg)$/i)) {
+            modernFormatImages++;
+        }
+    });
+
+    const aNodes = domutils.findAll((ele) => ele.name === 'a', dom.children);
+    let externalLinkCount = 0;
+    let noFollowExternalCount = 0;
+    const internalLinks: string[] = [];
+    const externalLinks: string[] = [];
+
+    aNodes.forEach(a => {
+        const href = a.attribs.href;
+        if (href) {
+            try {
+                const urlObj = new URL(url);
+                const hrefObj = new URL(href, url);
+                if (hrefObj.hostname !== urlObj.hostname) {
+                    externalLinkCount++;
+                    if (a.attribs.rel?.includes('nofollow')) {
+                        noFollowExternalCount++;
+                    }
+                    externalLinks.push(hrefObj.href);
+                } else {
+                    internalLinks.push(hrefObj.href);
+                }
+            } catch (e) { }
+        }
+    });
+
+    const hasAnalytics = html.includes('google-analytics') || html.includes('gtag') || html.includes('G-');
+    const isFriendlyUrl = !url.includes('?') && !url.includes('=');
+
+    return {
+        title,
+        metaDescription,
+        canonical: canonicalNode?.attribs.href || '',
+        h1Count: h1Nodes.length,
+        h1Details: h1Nodes.map(node => domutils.textContent(node).trim()).filter(Boolean),
+        h2Count: h2Nodes.length,
+        h2Details: h2Nodes.map(node => domutils.textContent(node).trim()).filter(Boolean),
+        imageCount: imgNodes.length,
+        totalImages: imgNodes.length,
+        imagesWithoutAlt: imgNodes.filter(img => !img.attribs.alt).length,
+        imagesWithoutAltDetails: imgNodes.filter(img => !img.attribs.alt).map(img => img.attribs.src || 'Unknown source').slice(0, 20),
+        responsiveImages,
+        modernFormatImages,
+        language: htmlNode?.attribs.lang || '',
+        hasFavicon: !!faviconNode,
+        charset: charsetNode?.attribs.charset || charsetNode?.attribs.content || '',
+        inlineCssCount: inlineCssNodes.length,
+        inlineCssDetails: inlineCssNodes.map(n => {
+            if (n.name === 'style') {
+                const content = domutils.textContent(n).trim().replace(/\s+/g, ' ');
+                return content ? `<style> ${content.substring(0, 50)}... </style>` : '<style>...</style>';
+            }
+            let attrStr = '';
+            if (n.attribs.id) attrStr += ` id="${n.attribs.id}"`;
+            if (n.attribs.class) attrStr += ` class="${n.attribs.class}"`;
+            const style = n.attribs.style || '';
+            const shortStyle = style.length > 40 ? style.substring(0, 40) + '...' : style;
+            return `<${n.name}${attrStr} style="${shortStyle}">`;
+        }).slice(0, 15),
+        deprecatedTagsCount: deprecatedNodes.length,
+        deprecatedTagsDetails: deprecatedNodes.map(n => {
+            const text = domutils.textContent(n).trim().replace(/\s+/g, ' ');
+            const shortText = text.length > 40 ? text.substring(0, 40) + '...' : text;
+            return shortText ? `<${n.name}> containing "${shortText}"` : `<${n.name}>`;
+        }).slice(0, 15),
+        htmlSize: html.length,
+        wordCount,
+        linkCount: aNodes.length,
+        internalLinks,
+        externalLinks,
+        externalLinkCount,
+        noFollowExternalCount,
+        hasAnalytics,
+        isFriendlyUrl,
+        hasDuplicateTitle: title.length > 0 && html.split(`<title>${title}</title>`).length > 2
+    };
+}
+
+export async function checkCustom404(baseUrl: string) {
+    try {
+        const randomPath = `/404-test-${Math.random().toString(36).substring(7)}`;
+        const testUrl = new URL(randomPath, baseUrl).href;
+
+        const response = await fetch(testUrl);
+        const html = await response.text();
+
+        // If it's 404 and has some content (not a generic browser/server 404)
+        const isCustom = response.status === 404 && html.length > 500 && !html.includes('nginx') && !html.includes('Apache');
+
+        return {
+            status: response.status,
+            isCustom,
+            hasError: response.status !== 404 // Should be 404 for a non-existent page
+        };
+    } catch (error) {
+        return { isCustom: false, error: 'Failed' };
+    }
+}
+
+export async function checkAssetCaching(baseUrl: string, html: string) {
+    const dom = htmlparser2.parseDocument(html);
+    const cssNodes = domutils.findAll((ele) => (ele.name === 'link' && ele.attribs.rel === 'stylesheet') || ele.name === 'script', dom.children);
+
+    const assets = cssNodes.map(node => node.attribs.href || node.attribs.src).filter(Boolean).slice(0, 3);
+
+    let cachedCount = 0;
+
+    for (const asset of assets) {
+        try {
+            const assetUrl = asset.startsWith('http') ? asset : new URL(asset, baseUrl).href;
+            const res = await fetch(assetUrl, { method: 'HEAD' });
+            const cacheControl = res.headers.get('cache-control');
+            if (cacheControl && (cacheControl.includes('max-age') || cacheControl.includes('immutable'))) {
+                cachedCount++;
+            }
+        } catch (e) { }
+    }
+
+    return {
+        totalAssets: assets.length,
+        cachedAssets: cachedCount,
+        isOptimized: assets.length > 0 ? (cachedCount / assets.length) > 0.5 : true
+    };
+}

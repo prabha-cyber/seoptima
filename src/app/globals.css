@@ -1,0 +1,247 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 10% 4%;
+    --foreground: 240 5% 96%;
+    --card: 240 10% 8%;
+    --card-foreground: 240 5% 96%;
+    --popover: 240 10% 8%;
+    --popover-foreground: 240 5% 96%;
+    --primary: 243 75% 59%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 8% 14%;
+    --secondary-foreground: 240 5% 96%;
+    --muted: 240 8% 14%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 293 69% 60%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 8% 16%;
+    --input: 240 8% 14%;
+    --ring: 243 75% 59%;
+    --radius: 0.75rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    background-image:
+      radial-gradient(ellipse at 20% 50%, rgba(99, 102, 241, 0.08) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 20%, rgba(217, 70, 239, 0.06) 0%, transparent 60%);
+    background-attachment: fixed;
+  }
+}
+
+@layer components {
+
+  /* Glass morphism cards */
+  .glass-card {
+    @apply bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl;
+  }
+
+  .glass-card-hover {
+    @apply glass-card transition-all duration-300 hover:bg-white/8 hover:border-white/20 hover:shadow-lg hover:shadow-brand-500/10;
+  }
+
+  /* Gradient text */
+  .gradient-text {
+    @apply bg-gradient-to-r from-brand-400 to-accent-400 bg-clip-text text-transparent;
+  }
+
+  /* Glow effects */
+  .glow-brand {
+    box-shadow: 0 0 30px rgba(99, 102, 241, 0.3);
+  }
+
+  .glow-accent {
+    box-shadow: 0 0 30px rgba(217, 70, 239, 0.3);
+  }
+
+  /* Score ring */
+  .score-ring {
+    @apply relative inline-flex items-center justify-center;
+  }
+
+  /* Sidebar */
+  .sidebar-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground transition-all duration-200 hover:bg-white/8 hover:text-foreground;
+  }
+
+  .sidebar-item.active {
+    @apply bg-brand-500/15 text-brand-400 border border-brand-500/20;
+  }
+
+  /* Status badges */
+  .badge-critical {
+    @apply bg-red-500/15 text-red-400 border border-red-500/20;
+  }
+
+  .badge-warning {
+    @apply bg-yellow-500/15 text-yellow-400 border border-yellow-500/20;
+  }
+
+  .badge-info {
+    @apply bg-blue-500/15 text-blue-400 border border-blue-500/20;
+  }
+
+  .badge-success {
+    @apply bg-green-500/15 text-green-400 border border-green-500/20;
+  }
+
+  /* Score colors */
+  .score-excellent {
+    @apply text-green-400;
+  }
+
+  .score-good {
+    @apply text-brand-400;
+  }
+
+  .score-fair {
+    @apply text-yellow-400;
+  }
+
+  .score-poor {
+    @apply text-red-400;
+  }
+
+  /* Input styles */
+  .input-base {
+    @apply w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition-all duration-200;
+  }
+
+  /* Button variants */
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-gradient-to-r from-brand-600 to-brand-500 text-white hover:from-brand-500 hover:to-brand-400 active:scale-95 transition-all duration-200 shadow-lg shadow-brand-500/20;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-white/8 text-foreground border border-white/10 hover:bg-white/12 hover:border-white/20 active:scale-95 transition-all duration-200;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-white/8 active:scale-95 transition-all duration-200;
+  }
+
+  .btn-destructive {
+    @apply inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-red-500/15 text-red-400 border border-red-500/20 hover:bg-red-500/25 active:scale-95 transition-all duration-200;
+  }
+
+  /* Loading skeleton */
+  .skeleton {
+    @apply animate-pulse bg-white/8 rounded;
+  }
+
+  /* Scrollbar */
+  .custom-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+  }
+
+  .custom-scroll::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .custom-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scroll::-webkit-scrollbar-thumb {
+    @apply bg-white/10 rounded-full;
+  }
+
+  .custom-scroll::-webkit-scrollbar-thumb:hover {
+    @apply bg-white/20;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .bg-white\/8 {
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .bg-white\/12 {
+    background-color: rgba(255, 255, 255, 0.12);
+  }
+}
+
+@media print {
+
+  /* Hide UI elements */
+  nav,
+  .sidebar,
+  aside,
+  header,
+  .no-print,
+  button,
+  .btn-primary,
+  .btn-secondary,
+  .btn-ghost,
+  .website-switcher,
+  .dashboard-header {
+    display: none !important;
+  }
+
+  /* Reset layout for print */
+  body {
+    background: white !important;
+    background-image: none !important;
+    color: black !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .ml-64 {
+    margin-left: 0 !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+  }
+
+  /* Ensure cards look good on paper */
+  .glass-card {
+    background: transparent !important;
+    border: 1px solid #eee !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+
+  /* Force background colors for bars/badges */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Typography adjustments */
+  h1,
+  h2,
+  h3 {
+    color: black !important;
+    break-after: avoid;
+  }
+
+  a {
+    text-decoration: none !important;
+    color: #4f46e5 !important;
+  }
+}

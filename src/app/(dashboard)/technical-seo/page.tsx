@@ -1,0 +1,734 @@
+'use client';
+
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useWebsite } from '@/context/website-context';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+    Code2, MapPin, FileText, Gauge, RotateCcw,
+    CheckCircle2, AlertTriangle, PlusCircle, Upload,
+    RefreshCw, Layers, ExternalLink, Search, Loader2,
+    ArrowRight, Info, Zap, ChevronRight, ChevronUp
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { SEO_INSTRUCTIONS } from '@/lib/seo/instructions';
+import { EXHAUSTIVE_CHECKS } from '@/lib/seo/checks';
+import { generateTechnicalSeoPdf } from '@/lib/seo/reports';
+import { Download, FileDown } from 'lucide-react';
+
+const tabs = [
+    { id: 'pages', label: 'All Pages', icon: FileText },
+    { id: 'schema', label: 'Schema', icon: Code2 },
+    { id: 'sitemap', label: 'Sitemap', icon: MapPin },
+    { id: 'robots', label: 'Robots.txt', icon: FileText },
+    { id: 'speed', label: 'Speed', icon: Gauge },
+    { id: 'redirects', label: 'Broken Links', icon: RotateCcw },
+];
+
+function CheckCard({ check, analysisResult }: { check: any; analysisResult: any }) {
+    const [showFix, setShowFix] = useState(false);
+    const [showList, setShowList] = useState(false);
+
+    const status = analysisResult.results?.[check.id] || 'pending';
+
+    // Helper to get raw value if it exists in technical or stats
+    let displayValue = 'Analyzed';
+    let detailsList: any[] = [];
+
+    if (check.id === 'meta_title') displayValue = analysisResult.technical?.title || 'Missing';
+    if (check.id === 'meta_desc') displayValue = analysisResult.technical?.metaDescription || 'Missing';
+    if (check.id === 'h1_tags') {
+        displayValue = (analysisResult.technical?.h1Count || 0) + ' found';
+        detailsList = analysisResult.technical?.h1Details || [];
+    }
+    if (check.id === 'h2_tags') {
+        detailsList = analysisResult.technical?.h2Details || [];
+    }
+    if (check.id === 'alt_tags' || check.id === 'img_alt_check') {
+        displayValue = (analysisResult.technical?.imagesWithoutAlt || 0) + ' missing alt tags';
+        detailsList = analysisResult.technical?.imagesWithoutAltDetails || [];
+    }
+    if (check.id === 'speed') displayValue = `${Math.round(analysisResult.stats?.performance?.performanceScore || 0)}/100`;
+    if (check.id === 'html_size') displayValue = `${(analysisResult.technical?.pageSize / 1024).toFixed(1)} KB`;
+    if (check.id === 'broken_links') {
+        displayValue = `${analysisResult.stats?.brokenLinks || 0} broken found`;
+        detailsList = (analysisResult.stats?.brokenDetails || []).map((b: any) => `${b.url} (${b.status})`);
+    }
+    if (check.id === 'google_index') displayValue = analysisResult.stats?.authority?.indexed ? 'Indexed' : 'Not Indexed';
+    if (check.id === 'inline_css') detailsList = analysisResult.technical?.inlineCssDetails || [];
+    if (check.id === 'deprecated_html') detailsList = analysisResult.technical?.deprecatedTagsDetails || [];
+
+    return (
+        <div className="glass-card p-5 border border-white/5 hover:border-white/10 transition-colors">
+            <div className="flex items-center justify-between mb-3">
+                <div className="flex flex-col">
+                    <div className="flex items-center gap-2 mb-1">
+                        {status === 'critical' ? <AlertTriangle className="w-3.5 h-3.5 text-red-500" /> :
+                            status === 'warning' ? <AlertTriangle className="w-3.5 h-3.5 text-yellow-500" /> :
+                                status === 'pass' ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500" /> : null}
+                        <span className="text-sm font-semibold">{check.title}</span>
+                    </div>
+                </div>
+                <span className={cn(
+                    "text-[10px] uppercase font-bold px-2 py-0.5 rounded",
+                    status === 'pass' ? "bg-green-500/10 text-green-400 border border-green-500/20" :
+                        status === 'critical' ? "bg-red-500/10 text-red-400 border border-red-500/20" :
+                            "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20"
+                )}>
+                    {status}
+                </span>
+            </div>
+
+            <p className="text-[13px] text-muted-foreground mb-4">{check.suggestion}</p>
+
+            {(detailsList.length > 0 || status !== 'pass') && (
+                <div className="flex items-center gap-2 pt-1">
+                    {detailsList.length > 0 && status !== 'pass' && (
+                        <button
+                            onClick={() => setShowList(!showList)}
+                            className="bg-transparent hover:bg-white/5 text-brand-400 text-xs py-1.5 px-3 rounded-md flex items-center gap-1.5 transition-colors border border-brand-500/30"
+                        >
+                            <span className="font-medium text-[11px] uppercase tracking-wide">
+                                {showList ? 'Hide list' : 'See full list'}
+                            </span>
+                            {showList ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                        </button>
+                    )}
+                    {status !== 'pass' && (
+                        <button
+                            onClick={() => setShowFix(!showFix)}
+                            className="bg-transparent hover:bg-white/5 text-zinc-300 text-xs py-1.5 px-3 rounded-md flex items-center gap-1.5 transition-colors border border-white/10"
+                        >
+                            <Info className="w-3.5 h-3.5" />
+                            <span className="font-medium text-[11px] uppercase tracking-wide">How to fix</span>
+                        </button>
+                    )}
+                </div>
+            )}
+
+            <AnimatePresence>
+                {showList && detailsList.length > 0 && status !== 'pass' && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
+                    >
+                        <div className="mt-4 p-4 rounded-lg bg-black/40 border border-white/5 max-h-[300px] overflow-y-auto custom-scroll">
+                            <ul className="list-disc pl-4 space-y-1.5 max-w-full">
+                                {detailsList.map((item: string, i: number) => (
+                                    <li key={i} className="text-xs text-zinc-400 break-all font-mono leading-relaxed">{item}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {showFix && status !== 'pass' && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
+                    >
+                        <div className="mt-4 px-5 py-4 rounded-lg bg-brand-500/10 border border-brand-500/20">
+                            <div className="flex items-start gap-3">
+                                <Zap className="w-4 h-4 text-brand-400 mt-0.5 shrink-0" />
+                                <div>
+                                    <p className="text-[10px] uppercase font-bold text-brand-400 mb-2 tracking-wider">Fix Instructions</p>
+                                    <p className="text-[13px] text-zinc-300 leading-relaxed font-medium">{check.howToFix}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+}
+
+function TechnicalSeoContent() {
+    const searchParams = useSearchParams();
+    const { activeWebsite } = useWebsite();
+    const [activeTab, setActiveTab] = useState('pages');
+
+    const resolveUrl = () => {
+        const qUrl = searchParams.get('url');
+        if (qUrl) return qUrl;
+        if (activeWebsite) return activeWebsite.domain || `https://${activeWebsite.subdomain}.antigravity.run`;
+        return '';
+    };
+
+    const [url, setUrl] = useState(resolveUrl);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [analysisResult, setAnalysisResult] = useState<any>(null);
+    const [selectedPage, setSelectedPage] = useState<string | null>(null);
+
+    // When active website changes in context, update url
+    useEffect(() => {
+        const newUrl = resolveUrl();
+        if (newUrl) setUrl(newUrl);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeWebsite?.id]);
+
+    useEffect(() => {
+        const queryUrl = searchParams.get('url');
+        if (queryUrl) {
+            setUrl(queryUrl);
+            handleAnalyze(queryUrl);
+        } else if (activeWebsite) {
+            const websiteUrl = activeWebsite.domain || `https://${activeWebsite.subdomain}.antigravity.run`;
+            setUrl(websiteUrl);
+            handleCrawlUrl(websiteUrl);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams]);
+
+    async function handleAnalyze(targetUrl?: string) {
+        const urlToAnalyze = targetUrl || url;
+        if (!urlToAnalyze) return;
+        setIsAnalyzing(true);
+        try {
+            const res = await fetch('/api/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: urlToAnalyze }),
+            });
+            const data = await res.json();
+
+            // If it's a sub-page analysis during a crawl, we merge/update the specific result
+            if (targetUrl && analysisResult?.isCrawl) {
+                setAnalysisResult({
+                    ...analysisResult,
+                    results: { ...analysisResult.results, [targetUrl]: data.results },
+                    technical: { ...analysisResult.technical, [targetUrl]: data.technical },
+                    stats: { ...analysisResult.stats, [targetUrl]: data.stats },
+                    structuredData: { ...analysisResult.structuredData, [targetUrl]: data.structuredData },
+                    currentPage: targetUrl
+                });
+            } else {
+                setAnalysisResult({ ...data, isCrawl: false });
+                if (!targetUrl) setSelectedPage(urlToAnalyze);
+            }
+        } catch (error) {
+            console.error('Analysis failed', error);
+        } finally {
+            setIsAnalyzing(false);
+        }
+    }
+
+    async function handleCrawlUrl(targetUrl?: string) {
+        const crawlUrl = targetUrl || url;
+        if (!crawlUrl) return;
+        setIsAnalyzing(true);
+        try {
+            const res = await fetch('/api/crawl', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: crawlUrl, limit: 30 }),
+            });
+            const data = await res.json();
+
+            if (data.error) {
+                console.error('Crawl error:', data.error);
+                return;
+            }
+
+            const firstUrl = Object.keys(data.results)[0];
+            const firstResult = data.results[firstUrl];
+
+            setAnalysisResult({
+                isCrawl: true,
+                allResults: data.results,
+                site_stats: data.site_stats,
+                stats: {
+                    discoveredUrls: Object.keys(data.results),
+                    ...firstResult.stats,
+                    robots: data.site_stats?.robots,
+                    sitemap: data.site_stats?.sitemap
+                },
+                results: firstResult.results || {},
+                technical: firstResult.technical || {},
+                structuredData: firstResult.structuredData || [],
+                currentPage: firstUrl
+            });
+            setSelectedPage(firstUrl);
+        } catch (error) {
+            console.error('Crawl failed', error);
+        } finally {
+            setIsAnalyzing(false);
+        }
+    }
+
+    async function handleCrawl() {
+        handleCrawlUrl(url);
+    }
+
+    return (
+        <div className="space-y-6 animate-fade-in max-w-[1600px] mx-auto">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-white/10">
+                <div className="space-y-1">
+                    <h1 className="text-3xl font-extrabold font-display tracking-tight text-white bg-gradient-to-r from-white to-white/60 bg-clip-text">
+                        Technical SEO Audit
+                    </h1>
+                    <p className="text-muted-foreground text-base">
+                        Deep site-wide crawl, internal links & technical health report
+                    </p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:max-w-2xl">
+                    <div className="relative flex-1 group">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-brand-400 transition-colors" />
+                        <input
+                            type="text"
+                            placeholder="Enter website URL (e.g. sanbrix.com)"
+                            value={url}
+                            onChange={(e) => setUrl(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleCrawl()}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3.5 text-base text-white placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500/40 transition-all"
+                        />
+                    </div>
+                    <button
+                        onClick={() => handleCrawl()}
+                        disabled={isAnalyzing || !url}
+                        className="relative overflow-hidden group h-[54px] px-8 rounded-xl bg-brand-500 hover:bg-brand-400 disabled:bg-white/10 disabled:cursor-not-allowed text-white font-bold shadow-xl shadow-brand-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-3 min-w-[200px]"
+                    >
+                        {isAnalyzing ? (
+                            <>
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                                <span>Crawling Site...</span>
+                            </>
+                        ) : (
+                            <>
+                                <Search className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                                <span>Analyze Website</span>
+                            </>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:animate-shimmer" />
+                    </button>
+
+                    {analysisResult && (
+                        <div className="flex gap-2 shrink-0">
+                            <button
+                                onClick={() => {
+                                    const targetUrl = selectedPage || url;
+                                    if (targetUrl) {
+                                        window.open(`/report?url=${encodeURIComponent(targetUrl)}`, '_blank');
+                                    }
+                                }}
+                                className="h-[54px] px-6 rounded-xl bg-brand-500/10 border border-brand-500/20 hover:bg-brand-500/20 text-brand-400 font-medium transition-all flex items-center justify-center gap-2"
+                            >
+                                <ExternalLink className="w-5 h-5" />
+                                <span className="hidden sm:inline">View Report</span>
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const targetUrl = selectedPage || url;
+                                    if (targetUrl) {
+                                        window.open(`/api/report/pdf?url=${encodeURIComponent(targetUrl)}`, '_blank');
+                                    }
+                                }}
+                                className="h-[54px] px-6 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-white font-medium transition-all flex items-center justify-center gap-2"
+                            >
+                                <FileDown className="w-5 h-5 text-brand-400" />
+                                <span className="hidden xl:inline">Download PDF</span>
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Error Message */}
+            {!isAnalyzing && !analysisResult && url && (
+                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm animate-fade-in flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                    Enter a URL and click Analyze to start the audit.
+                </div>
+            )}
+
+            {/* Tabs */}
+            <div className="flex gap-1 p-1 bg-white/5 rounded-xl border border-white/8 w-fit overflow-x-auto">
+                {tabs.map((tab) => {
+                    const Icon = tab.icon;
+                    return (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={cn(
+                                'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap',
+                                activeTab === tab.id
+                                    ? 'bg-brand-500/20 text-brand-400 border border-brand-500/30'
+                                    : 'text-muted-foreground hover:text-foreground'
+                            )}
+                        >
+                            <Icon className="w-3.5 h-3.5" />
+                            {tab.label}
+                        </button>
+                    );
+                })}
+            </div>
+
+            {!analysisResult && !isAnalyzing && (
+                <div className="glass-card p-12 text-center">
+                    <div className="bg-brand-500/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Search className="w-8 h-8 text-brand-400" />
+                    </div>
+                    <h3 className="text-xl font-semibold">Ready to Audit</h3>
+                    <p className="text-muted-foreground max-w-sm mx-auto mt-2">
+                        Enter a website URL above to perform a real-time technical SEO analysis.
+                    </p>
+                </div>
+            )}
+
+            {isAnalyzing && (
+                <div className="glass-card p-12 text-center">
+                    <Loader2 className="w-12 h-12 text-brand-500 animate-spin mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold">Analyzing Site...</h3>
+                    <p className="text-muted-foreground">Checking structured data, performance, and links</p>
+                </div>
+            )}
+
+            {analysisResult && (
+                <div className="space-y-6">
+                    {activeTab === 'pages' && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="md:col-span-1 space-y-4">
+                                <h3 className="font-semibold px-2">Discovered Pages</h3>
+                                <div className="glass-card overflow-hidden divide-y divide-white/8">
+                                    <div className="max-h-[600px] overflow-y-auto custom-scroll">
+                                        {(analysisResult.isCrawl ? Object.keys(analysisResult.allResults) : [(url || ''), ...(analysisResult.stats?.discoveredUrls || [])]).slice(0, 100).map((p: string, i: number) => (
+                                            <button
+                                                key={i}
+                                                onClick={() => {
+                                                    setSelectedPage(p);
+                                                    if (analysisResult.isCrawl && analysisResult.allResults[p]) {
+                                                        const pageData = analysisResult.allResults[p];
+                                                        setAnalysisResult({
+                                                            ...analysisResult,
+                                                            results: pageData.results || {},
+                                                            technical: pageData.technical || pageData,
+                                                            stats: {
+                                                                ...analysisResult.stats,
+                                                                ...pageData.stats,
+                                                                // Persist site-wide stats from the crawl top-level
+                                                                robots: analysisResult.site_stats?.robots,
+                                                                sitemap: analysisResult.site_stats?.sitemap
+                                                            },
+                                                            structuredData: pageData.structuredData || [],
+                                                            currentPage: p
+                                                        });
+                                                    } else {
+                                                        handleAnalyze(p);
+                                                    }
+                                                }}
+                                                className={cn(
+                                                    "w-full text-left p-3 text-xs truncate transition-colors hover:bg-white/5",
+                                                    selectedPage === p ? "bg-brand-500/5 text-brand-400 font-medium" : "text-muted-foreground"
+                                                )}
+                                            >
+                                                {p}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="md:col-span-2 space-y-4">
+                                <div className="flex items-center justify-between px-2">
+                                    <h3 className="font-semibold flex items-center gap-2">
+                                        Audit Details: <span className="text-brand-400 font-mono text-xs">{selectedPage}</span>
+                                    </h3>
+                                    <button
+                                        onClick={() => selectedPage && handleAnalyze(selectedPage)}
+                                        disabled={isAnalyzing}
+                                        className="btn-ghost py-1 text-[10px] flex items-center gap-1.5"
+                                    >
+                                        {isAnalyzing ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3 text-brand-400" />}
+                                        Run Deep Audit
+                                    </button>
+                                </div>
+
+                                {/* Summary Stats Bar */}
+                                {analysisResult.results && Object.keys(analysisResult.results).length > 0 && (() => {
+                                    const score = analysisResult.score !== undefined ? analysisResult.score : (() => {
+                                        const allStatuses = EXHAUSTIVE_CHECKS.map(c => analysisResult.results?.[c.id] || 'pending');
+                                        const passCount = allStatuses.filter(s => s === 'pass').length;
+                                        return Math.round((passCount / EXHAUSTIVE_CHECKS.length) * 100);
+                                    })();
+
+                                    const criticalCount = analysisResult.criticalCount !== undefined ? analysisResult.criticalCount :
+                                        EXHAUSTIVE_CHECKS.map(c => analysisResult.results?.[c.id] || 'pending').filter(s => s === 'critical').length;
+
+                                    const warningCount = analysisResult.warningCount !== undefined ? analysisResult.warningCount :
+                                        EXHAUSTIVE_CHECKS.map(c => analysisResult.results?.[c.id] || 'pending').filter(s => s === 'warning').length;
+
+                                    const passCount = analysisResult.passCount !== undefined ? analysisResult.passCount :
+                                        EXHAUSTIVE_CHECKS.map(c => analysisResult.results?.[c.id] || 'pending').filter(s => s === 'pass').length;
+
+                                    return (
+                                        <div className="glass-card px-5 py-4 flex flex-col sm:flex-row items-center gap-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className={cn(
+                                                    "text-2xl font-bold font-display w-14 h-14 rounded-full flex items-center justify-center border-2",
+                                                    score >= 80 ? "text-green-400 border-green-500/40" :
+                                                        score >= 50 ? "text-yellow-400 border-yellow-500/40" : "text-red-400 border-red-500/40"
+                                                )}>{score}</div>
+                                                <div>
+                                                    <p className="text-xs text-muted-foreground">SEO Health Score</p>
+                                                    <div className="w-32 h-1.5 bg-white/10 rounded-full mt-1 overflow-hidden">
+                                                        <div className={cn("h-full rounded-full", score >= 80 ? "bg-green-500" : score >= 50 ? "bg-yellow-500" : "bg-red-500")} style={{ width: `${score}%` }} />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-3 ml-auto">
+                                                {criticalCount > 0 && (
+                                                    <div className="text-center px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                                                        <p className="text-lg font-bold text-red-400">{criticalCount}</p>
+                                                        <p className="text-[10px] text-red-400/70 uppercase font-semibold">Critical</p>
+                                                    </div>
+                                                )}
+                                                {warningCount > 0 && (
+                                                    <div className="text-center px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                                                        <p className="text-lg font-bold text-yellow-400">{warningCount}</p>
+                                                        <p className="text-[10px] text-yellow-400/70 uppercase font-semibold">Warnings</p>
+                                                    </div>
+                                                )}
+                                                <div className="text-center px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/20">
+                                                    <p className="text-lg font-bold text-green-400">{passCount}</p>
+                                                    <p className="text-[10px] text-green-400/70 uppercase font-semibold">Passed</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+
+                                {isAnalyzing && selectedPage === analysisResult.currentPage && (
+                                    <div className="glass-card p-8 text-center animate-pulse">
+                                        <Loader2 className="w-8 h-8 text-brand-500 animate-spin mx-auto mb-2" />
+                                        <p className="text-sm font-medium">Fetching real-time metrics...</p>
+                                    </div>
+                                )}
+
+                                <div className={cn("grid grid-cols-1 gap-4 transition-opacity", isAnalyzing && selectedPage === analysisResult.currentPage && "opacity-50 pointer-events-none")}>
+                                    {[...EXHAUSTIVE_CHECKS]
+                                        .sort((a, b) => {
+                                            const order: Record<string, number> = { 'critical': 0, 'warning': 1, 'pass': 2, 'info': 3, 'pending': 4 };
+                                            const statusA = analysisResult.results?.[a.id] || 'pending';
+                                            const statusB = analysisResult.results?.[b.id] || 'pending';
+                                            return (order[statusA] ?? 5) - (order[statusB] ?? 5);
+                                        })
+                                        .map((check) => (
+                                            <CheckCard key={check.id} check={check} analysisResult={analysisResult} />
+                                        ))}
+                                </div>
+                            </div>
+
+                        </div>
+                    )}
+
+                    {activeTab === 'schema' && (
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between px-2">
+                                <p className="text-sm text-muted-foreground">
+                                    {analysisResult.structuredData?.length || 0} JSON-LD schema blocks found
+                                </p>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {analysisResult.structuredData?.map((schema: any, i: number) => (
+                                    <motion.div
+                                        key={i}
+                                        initial={{ opacity: 0, y: 8 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: i * 0.05 }}
+                                        className="glass-card p-4"
+                                    >
+                                        <div className="flex items-center justify-between mb-3">
+                                            <span className="font-medium text-sm">{schema['@type'] || 'Structured Data'}</span>
+                                            <CheckCircle2 className="w-4 h-4 text-green-400" />
+                                        </div>
+                                        <div className="bg-black/20 p-2 rounded text-[10px] font-mono overflow-auto h-32 text-muted-foreground scrollbar-hide">
+                                            <pre>{JSON.stringify(schema, null, 2)}</pre>
+                                        </div>
+                                    </motion.div>
+                                ))}
+                                {(!analysisResult.structuredData || analysisResult.structuredData.length === 0) && (
+                                    <div className="col-span-full py-12 text-center glass-card">
+                                        <AlertTriangle className="w-8 h-8 text-yellow-500 mx-auto mb-2" />
+                                        <p className="text-sm">No structured data found on this page.</p>
+                                        <p className="text-[10px] text-brand-300 mt-2 max-w-xs mx-auto">{SEO_INSTRUCTIONS.schema_generator || 'Add JSON-LD schema to help search engines understand your content.'}</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'sitemap' && (
+                        <div className="glass-card p-6 space-y-4">
+                            <h3 className="font-semibold">Sitemap Detection</h3>
+                            <p className="text-xs text-muted-foreground font-mono bg-black/20 p-2 rounded">
+                                {analysisResult.stats?.sitemap?.url || 'Not detected'}
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                                <div className="glass-card p-4 text-center">
+                                    <p className={cn("text-2xl font-bold font-display", analysisResult.stats?.sitemap?.exists ? "text-green-400" : "text-red-400")}>
+                                        {analysisResult.stats?.sitemap?.exists ? 'Yes' : 'No'}
+                                    </p>
+                                    <p className="text-[10px] text-muted-foreground mt-1">Found in robots.txt / root</p>
+                                </div>
+                                <div className="glass-card p-4 text-center">
+                                    <p className="text-2xl font-bold font-display text-brand-400">
+                                        {analysisResult.stats?.sitemap?.size ? `${(analysisResult.stats.sitemap.size / 1024).toFixed(1)} KB` : '-'}
+                                    </p>
+                                    <p className="text-[10px] text-muted-foreground mt-1">File Size</p>
+                                </div>
+                                <div className="glass-card p-4 text-center">
+                                    <p className="text-2xl font-bold font-display text-green-400">
+                                        {analysisResult.stats?.discoveredUrls?.length || 0}
+                                    </p>
+                                    <p className="text-[10px] text-muted-foreground mt-1">URLs Found</p>
+                                </div>
+                            </div>
+                            {!analysisResult.stats?.sitemap?.exists && (
+                                <div className="mt-4 p-3 rounded bg-red-500/5 border border-red-500/10">
+                                    <p className="text-[10px] text-red-300">
+                                        <span className="font-bold mr-1">Fix:</span> {SEO_INSTRUCTIONS.sitemap}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {activeTab === 'robots' && (
+                        <div className="glass-card p-6 space-y-4">
+                            <div className="flex items-center justify-between">
+                                <h3 className="font-semibold">Robots.txt Analysis</h3>
+                                <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded", analysisResult.stats?.robots?.exists ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400")}>
+                                    {analysisResult.stats?.robots?.exists ? 'Found' : 'Missing'}
+                                </span>
+                            </div>
+                            <div className="bg-black/20 p-4 rounded-lg font-mono text-xs text-muted-foreground min-h-[100px]">
+                                {analysisResult.stats?.robots?.isAllowed ? '✅ Googlebot is allowed to crawl this URL.' : '❌ Googlebot is blocked.'}
+                                <br /><br />
+                                {analysisResult.stats?.robots?.sitemaps?.length > 0 && (
+                                    <>
+                                        Sitemaps declared:
+                                        <ul className="list-disc pl-4 mt-1">
+                                            {analysisResult.stats.robots.sitemaps.map((s: string) => <li key={s}>{s}</li>)}
+                                        </ul>
+                                    </>
+                                )}
+                            </div>
+                            {!analysisResult.stats?.robots?.exists && (
+                                <div className="p-3 rounded bg-red-500/5 border border-red-500/10">
+                                    <p className="text-[10px] text-red-300">
+                                        <span className="font-bold mr-1">Fix:</span> {SEO_INSTRUCTIONS.robots}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {activeTab === 'speed' && (
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                <motion.div className="glass-card p-5 text-center flex flex-col justify-center">
+                                    <div className={cn(
+                                        "text-4xl font-bold font-display mx-auto mb-2 flex items-center justify-center w-24 h-24 rounded-full border-4 relative",
+                                        (analysisResult.stats?.performance?.performanceScore || 0) > 85 ? "text-green-400 border-green-400/20" : "text-yellow-400 border-yellow-400/20"
+                                    )}>
+                                        {Math.round(analysisResult.stats?.performance?.performanceScore || 0)}
+                                        {analysisResult.stats?.performance?.isSimulated && (
+                                            <div className="absolute -bottom-2 -right-2 bg-brand-500 text-[8px] px-1.5 py-0.5 rounded-full text-white font-bold border border-white/20 animate-pulse">
+                                                SIM
+                                            </div>
+                                        )}
+                                    </div>
+                                    <p className="font-medium text-sm">Performance Score</p>
+                                    {analysisResult.stats?.performance?.isSimulated && (
+                                        <p className="text-[10px] text-muted-foreground mt-2 opacity-60 italic">Simulated scoring for crawl</p>
+                                    )}
+                                </motion.div>
+
+                                <div className="col-span-1 lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    {[
+                                        { id: 'lcp', label: 'LCP', value: analysisResult.stats?.performance?.largestContentfulPaint || 'N/A', target: '< 2.5s', desc: 'Largest Contentful Paint' },
+                                        { label: 'FCP', value: analysisResult.stats?.performance?.firstContentfulPaint || 'N/A', target: '< 1.8s', desc: 'First Contentful Paint' },
+                                        { id: 'cls', label: 'CLS', value: analysisResult.stats?.performance?.cumulativeLayoutShift || 'N/A', target: '< 0.1', desc: 'Cumulative Layout Shift' },
+                                        { label: 'TBT', value: analysisResult.stats?.performance?.totalBlockingTime || 'N/A', target: '< 200ms', desc: 'Total Blocking Time' },
+                                    ].map((m) => (
+                                        <div key={m.label} className="glass-card p-4">
+                                            <p className="text-lg font-bold font-display">{m.value}</p>
+                                            <p className="font-medium text-xs mt-1">{m.label}</p>
+                                            <p className="text-[10px] text-muted-foreground">{m.desc}</p>
+                                            <span className="text-[10px] mt-2 block opacity-60">Target: {m.target}</span>
+                                            {m.id && (
+                                                <div className="mt-3 pt-3 border-t border-white/5">
+                                                    <p className="text-[9px] text-brand-300 leading-relaxed">{SEO_INSTRUCTIONS[m.id]}</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'redirects' && (
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between px-2">
+                                <h3 className="font-semibold text-lg">Internal & External Links Report</h3>
+                                <p className="text-sm text-muted-foreground">
+                                    {analysisResult.stats?.scannedLinks || 0} unique links scanned ({analysisResult.stats?.brokenLinks || 0} broken)
+                                </p>
+                            </div>
+                            <div className="glass-card divide-y divide-white/8 overflow-hidden">
+                                {analysisResult.stats?.allLinks?.map((link: any, i: number) => (
+                                    <div key={i} className="flex items-center gap-4 p-4 hover:bg-white/5 transition-colors">
+                                        <span className={cn(
+                                            "text-[10px] px-2 py-0.5 rounded border font-bold uppercase",
+                                            link.ok ? "bg-green-500/10 text-green-400 border-green-500/20" : "bg-red-500/10 text-red-400 border-red-500/20"
+                                        )}>
+                                            {link.status || (link.ok ? '200' : 'ERR')}
+                                        </span>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className={cn(
+                                                    "text-[9px] px-1.5 py-px rounded font-medium",
+                                                    link.isInternal ? "bg-brand-500/20 text-brand-400" : "bg-white/10 text-muted-foreground"
+                                                )}>
+                                                    {link.type}
+                                                </span>
+                                                <p className="text-xs font-mono text-muted-foreground truncate">{link.url}</p>
+                                            </div>
+                                            {!link.ok && <p className="text-[10px] text-red-300 font-medium">{link.reason}</p>}
+                                        </div>
+                                        {!link.ok && (
+                                            <div className="max-w-[200px] hidden md:block">
+                                                <p className="text-[9px] text-brand-300 leading-tight">{SEO_INSTRUCTIONS.broken_links}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                                {(!analysisResult.stats?.allLinks || analysisResult.stats?.allLinks.length === 0) && (
+                                    <div className="p-12 text-center">
+                                        <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-2" />
+                                        <p className="font-medium">No links found on this page.</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
+export default function TechnicalSeoPage() {
+    return (
+        <Suspense fallback={<div className="p-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-brand-500" /></div>}>
+            <TechnicalSeoContent />
+        </Suspense>
+    );
+}

@@ -1,0 +1,50 @@
+import { NextRequest, NextResponse } from 'next/server';
+
+export async function GET(req: NextRequest) {
+  const { searchParams, origin } = new URL(req.url);
+  const targetUrl = searchParams.get('url');
+
+  if (!targetUrl) {
+    return NextResponse.json({ error: 'URL is required' }, { status: 400 });
+  }
+
+  let browser;
+  try {
+    const { chromium } = await import('playwright');
+    const reportUrl = `${origin}/report?url=${encodeURIComponent(targetUrl)}`;
+
+    browser = await chromium.launch();
+    const page = await browser.newPage();
+
+    // Navigate to the frontend report page
+    await page.goto(reportUrl, { waitUntil: 'networkidle', timeout: 60000 });
+
+    // The frontend fetches data from /api/analyze and shows a loading spinner first.
+    // When done, it shows the report container with class .max-w-[850px]
+    await page.waitForSelector('.max-w-\\[850px\\]', { state: 'attached', timeout: 60000 });
+
+    // Wait a little bit extra to ensure all charts or images are fully rendered
+    await page.waitForTimeout(2000);
+
+    // Generate the PDF
+    const pdf = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '0', right: '0', bottom: '0', left: '0' }
+    });
+
+    await browser.close();
+
+    return new NextResponse(new Uint8Array(pdf), {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="SEO-Report-${targetUrl.replace(/[^a-z0-9]/gi, '-')}.pdf"`
+      }
+    });
+
+  } catch (error) {
+    console.error('PDF Generation Error:', error);
+    if (browser) await browser.close();
+    return NextResponse.json({ error: 'Failed to generate PDF' }, { status: 500 });
+  }
+}

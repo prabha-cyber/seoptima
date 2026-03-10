@@ -1,0 +1,708 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String         @id @default(cuid())
+  name          String?
+  email         String         @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          String         @default("USER")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  accounts      Account[]
+  agencyMembers AgencyMember[]
+  aiCredits     AiCredit?
+  gscToken      GscToken?
+  notifications Notification[]
+  reports       Report[]
+  sessions      Session[]
+  subscription  Subscription?
+  websites      Website[]
+  uptimeMonitors UptimeMonitor[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model Subscription {
+  id                   String    @id @default(cuid())
+  userId               String    @unique
+  plan                 String    @default("FREE")
+  status               String    @default("ACTIVE")
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+  stripePriceId        String?
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean   @default(false)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+model Website {
+  id          String       @id @default(cuid())
+  userId      String
+  name        String
+  domain      String?
+  subdomain   String?      @unique
+  favicon     String?
+  logo        String?
+  goal        String       @default("BLOG")
+  builderMode String       @default("MANUAL")
+  published   Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  agencyId    String?
+  adsAccounts AdsAccount[]
+  Backlink    Backlink[]
+  competitors Competitor[]
+  keywords    Keyword[]
+  pages       Page[]
+  posts       Post[]
+  products    Product[]
+  redirects   Redirect[]
+  seoReports  SeoReport[]
+  agency      Agency?      @relation("AgencyToWebsite", fields: [agencyId], references: [id])
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("websites")
+}
+
+model Page {
+  id         String     @id @default(cuid())
+  websiteId  String
+  title      String
+  slug       String
+  content    String     @default("[]")
+  metaTitle  String?
+  metaDesc   String?
+  canonical  String?
+  ogImage    String?
+  pageType   String     @default("CUSTOM")
+  isHomePage Boolean    @default(false)
+  published  Boolean    @default(false)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  website    Website    @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  seoIssues  SeoIssue[]
+
+  @@unique([websiteId, slug])
+  @@map("pages")
+}
+
+model Post {
+  id          String         @id @default(cuid())
+  websiteId   String
+  title       String
+  slug        String
+  content     String
+  excerpt     String?
+  featuredImg String?
+  metaTitle   String?
+  metaDesc    String?
+  canonical   String?
+  status      String         @default("DRAFT")
+  publishedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  categories  PostCategory[]
+  tags        PostTag[]
+  website     Website        @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  revisions   Revision[]
+
+  @@unique([websiteId, slug])
+  @@map("posts")
+}
+
+model Category {
+  id        String         @id @default(cuid())
+  name      String
+  slug      String         @unique
+  createdAt DateTime       @default(now())
+  posts     PostCategory[]
+
+  @@map("categories")
+}
+
+model Tag {
+  id        String    @id @default(cuid())
+  name      String
+  slug      String    @unique
+  createdAt DateTime  @default(now())
+  posts     PostTag[]
+
+  @@map("tags")
+}
+
+model PostCategory {
+  postId     String
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@id([postId, categoryId])
+  @@map("post_categories")
+}
+
+model PostTag {
+  postId String
+  tagId  String
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+  @@map("post_tags")
+}
+
+model Media {
+  id        String   @id @default(cuid())
+  websiteId String?
+  name      String
+  url       String
+  publicId  String?
+  mimeType  String
+  size      Int
+  width     Int?
+  height    Int?
+  alt       String?
+  createdAt DateTime @default(now())
+
+  @@map("media")
+}
+
+model Revision {
+  id        String   @id @default(cuid())
+  postId    String
+  content   String
+  createdAt DateTime @default(now())
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@map("revisions")
+}
+
+model Product {
+  id           String      @id @default(cuid())
+  websiteId    String
+  name         String
+  slug         String
+  description  String?
+  price        Float       @default(0)
+  comparePrice Float?
+  images       String      @default("[]")
+  sku          String?
+  stock        Int         @default(0)
+  metaTitle    String?
+  metaDesc     String?
+  status       String      @default("ACTIVE")
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  cartItems    CartItem[]
+  orderItems   OrderItem[]
+  website      Website     @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  @@unique([websiteId, slug])
+  @@map("products")
+}
+
+model CartItem {
+  id        String   @id @default(cuid())
+  sessionId String
+  productId String
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("cart_items")
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  websiteId       String
+  customerEmail   String
+  customerName    String?
+  total           Float       @default(0)
+  status          String      @default("PENDING")
+  stripePaymentId String?
+  couponCode      String?
+  discount        Float?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  items           OrderItem[]
+  payment         Payment?
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  productId String
+  quantity  Int
+  price     Float
+  product   Product @relation(fields: [productId], references: [id])
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("order_items")
+}
+
+model Payment {
+  id                String   @id @default(cuid())
+  orderId           String   @unique
+  amount            Float
+  currency          String   @default("usd")
+  provider          String
+  providerPaymentId String?
+  status            String   @default("PENDING")
+  createdAt         DateTime @default(now())
+  order             Order    @relation(fields: [orderId], references: [id])
+
+  @@map("payments")
+}
+
+model Coupon {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  type      String    @default("PERCENTAGE")
+  value     Float
+  maxUses   Int?
+  usedCount Int       @default(0)
+  expiresAt DateTime?
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  @@map("coupons")
+}
+
+model SeoReport {
+  id             String     @id @default(cuid())
+  websiteId      String
+  overallScore   Int        @default(0)
+  technicalScore Int        @default(0)
+  contentScore   Int        @default(0)
+  speedScore     Int        @default(0)
+  schemaScore    Int        @default(0)
+  sitemapScore   Int        @default(0)
+  indexScore     Int        @default(0)
+  crawledPages   Int        @default(0)
+  issuesFound    Int        @default(0)
+  createdAt      DateTime   @default(now())
+  fullResults    String?
+  issues         SeoIssue[]
+  website        Website    @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  @@map("seo_reports")
+}
+
+model SeoIssue {
+  id          String    @id @default(cuid())
+  reportId    String
+  pageId      String?
+  type        String
+  severity    String    @default("WARNING")
+  title       String
+  description String
+  suggestion  String?
+  resolved    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  page        Page?     @relation(fields: [pageId], references: [id])
+  report      SeoReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@map("seo_issues")
+}
+
+model Redirect {
+  id        String   @id @default(cuid())
+  websiteId String
+  from      String
+  to        String
+  type      Int      @default(301)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  website   Website  @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  @@map("redirects")
+}
+
+model AiCredit {
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  total     Int       @default(50)
+  used      Int       @default(0)
+  resetAt   DateTime  @default(now())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  usages    AiUsage[]
+
+  @@map("ai_credits")
+}
+
+model AiUsage {
+  id          String   @id @default(cuid())
+  creditId    String
+  tool        String
+  tokensUsed  Int      @default(0)
+  creditsUsed Int      @default(1)
+  prompt      String?
+  result      String?
+  createdAt   DateTime @default(now())
+  credit      AiCredit @relation(fields: [creditId], references: [id], onDelete: Cascade)
+
+  @@map("ai_usages")
+}
+
+model AdsAccount {
+  id          String      @id @default(cuid())
+  websiteId   String
+  platform    String
+  accountId   String
+  accessToken String?
+  active      Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  website     Website     @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  metrics     AdsMetric[]
+
+  @@map("ads_accounts")
+}
+
+model AdsMetric {
+  id          String     @id @default(cuid())
+  accountId   String
+  date        DateTime
+  clicks      Int        @default(0)
+  impressions Int        @default(0)
+  ctr         Float      @default(0)
+  cpc         Float      @default(0)
+  spend       Float      @default(0)
+  conversions Int        @default(0)
+  roas        Float      @default(0)
+  createdAt   DateTime   @default(now())
+  account     AdsAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("ads_metrics")
+}
+
+model AutomationRule {
+  id        String          @id @default(cuid())
+  websiteId String?
+  name      String
+  trigger   String
+  action    String
+  config    String          @default("{}")
+  active    Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  logs      AutomationLog[]
+
+  @@map("automation_rules")
+}
+
+model AutomationLog {
+  id        String         @id @default(cuid())
+  ruleId    String
+  status    String
+  details   String?
+  createdAt DateTime       @default(now())
+  rule      AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@map("automation_logs")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      String   @default("INFO")
+  read      Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model Report {
+  id        String    @id @default(cuid())
+  userId    String
+  websiteId String?
+  title     String
+  type      String    @default("MONTHLY")
+  pdfUrl    String?
+  data      String    @default("{}")
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("reports")
+}
+
+model Keyword {
+  id        String           @id @default(cuid())
+  websiteId String
+  term      String
+  targetUrl String?
+  status    String           @default("TRACKING")
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  rankings  KeywordRanking[]
+  website   Website          @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  @@unique([websiteId, term])
+  @@map("keywords")
+}
+
+model KeywordRanking {
+  id           String   @id @default(cuid())
+  keywordId    String
+  position     Int
+  bestPosition Int?
+  change       Int?     @default(0)
+  source       String   @default("SERP")
+  recordedAt   DateTime @default(now())
+  keyword      Keyword  @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  @@index([keywordId, recordedAt])
+  @@map("keyword_rankings")
+}
+
+model Competitor {
+  id        String   @id @default(cuid())
+  websiteId String
+  name      String
+  url       String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  website   Website  @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  @@map("competitors")
+}
+
+model GscToken {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  accessToken  String
+  refreshToken String
+  expiryDate   BigInt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("gsc_tokens")
+}
+
+model Backlink {
+  id              String   @id @default(cuid())
+  websiteId       String
+  referringDomain String
+  anchorText      String?
+  linkType        String   @default("dofollow")
+  authorityScore  Int?     @default(0)
+  firstSeen       DateTime @default(now())
+  lastSeen        DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  website         Website  @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  @@map("backlinks")
+}
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  group     String   @default("GENERAL")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+model SystemLog {
+  id        String   @id @default(cuid())
+  type      String   @default("INFO")
+  source    String?
+  message   String
+  details   String?
+  userId    String?
+  createdAt DateTime @default(now())
+
+  @@map("system_logs")
+}
+
+model ApiUsage {
+  id        String   @id @default(cuid())
+  provider  String
+  type      String
+  success   Boolean  @default(true)
+  metadata  String?
+  createdAt DateTime @default(now())
+
+  @@map("api_usages")
+}
+
+model Agency {
+  id          String          @id @default(cuid())
+  name        String
+  description String?
+  logo        String?
+  website     String?
+  status      String          @default("ACTIVE")
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  features    AgencyFeature[]
+  members     AgencyMember[]
+  websites    Website[]       @relation("AgencyToWebsite")
+
+  @@map("agencies")
+}
+
+model AgencyMember {
+  id        String   @id @default(cuid())
+  agencyId  String
+  userId    String
+  role      String   @default("MEMBER")
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@unique([agencyId, userId])
+  @@map("agency_members")
+}
+
+model AgencyFeature {
+  id       String  @id @default(cuid())
+  agencyId String
+  feature  String
+  enabled  Boolean @default(true)
+  limit    Int?
+  agency   Agency  @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@unique([agencyId, feature])
+  @@map("agency_features")
+}
+
+model PaymentGateway {
+  id            String   @id @default(cuid())
+  name          String
+  isEnabled     Boolean  @default(true)
+  isLive        Boolean  @default(false)
+  publicKey     String?
+  secretKey     String?
+  webhookSecret String?
+  config        String   @default("{}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("payment_gateways")
+}
+
+model UptimeMonitor {
+  id               String         @id @default(cuid())
+  userId           String
+  name             String
+  url              String
+  interval         Int            @default(5)
+  active           Boolean        @default(true)
+  status           String         @default("UNKNOWN")
+  crawlProgress    Int            @default(0)
+  lastChecked      DateTime?
+  lastStatus       Int?
+  lastResponseTime Int?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emails           MonitorEmail[]
+  checks           UptimeCheck[]
+  pages            MonitorPage[]
+
+  @@map("uptime_monitors")
+}
+
+model MonitorPage {
+  id        String        @id @default(cuid())
+  monitorId String
+  url       String
+  active    Boolean       @default(true)
+  monitor   UptimeMonitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  checks    UptimeCheck[]
+
+  @@unique([monitorId, url])
+  @@map("monitor_pages")
+}
+
+model MonitorEmail {
+  id        String        @id @default(cuid())
+  monitorId String
+  email     String
+  createdAt DateTime      @default(now())
+  monitor   UptimeMonitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+
+  @@unique([monitorId, email])
+  @@map("monitor_emails")
+}
+
+model UptimeCheck {
+  id           String         @id @default(cuid())
+  monitorId    String
+  pageId       String?
+  statusCode   Int?
+  responseTime Int?
+  isUp         Boolean
+  error        String?
+  checkedAt    DateTime       @default(now())
+  monitor      UptimeMonitor  @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  page         MonitorPage?   @relation(fields: [pageId], references: [id], onDelete: SetNull)
+
+  @@index([monitorId, checkedAt])
+  @@map("uptime_checks")
+}
