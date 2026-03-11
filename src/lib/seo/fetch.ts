@@ -34,58 +34,181 @@ export async function robustFetch(url: string, useBrowser: boolean = false): Pro
         }
     }
 
-    let browser;
     try {
-        // Use eval('require') to prevent Next.js webpack from trying to bundle these plugins statically
-        // since they contain dynamic requires that break the build
         const req = eval('require');
-        const { chromium } = req('playwright-extra');
+        const { chromium, firefox } = req('playwright-extra');
         const stealthPluginModule = req('puppeteer-extra-plugin-stealth');
-
-        // Handle common default export patterns
         const StealthPlugin = stealthPluginModule.default || (stealthPluginModule as any);
-        chromium.use(StealthPlugin());
 
-        browser = await chromium.launch({
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled']
-        });
-        const context = await browser.newContext({
-            userAgent: ua,
-            viewport: { width: 1920, height: 1080 }
-        });
-        const page = await context.newPage();
-        const response = await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
-        if (!response) throw new Error('No response');
+        const tryBypass = async (browserType: any, options: any) => {
+            console.log(`[robustFetch] Attempting bypass with ${options.name}...`);
+            const plugin = StealthPlugin();
+            browserType.use(plugin);
 
-        // Wait up to 15 seconds for Cloudflare to resolve
-        for (let i = 0; i < 7; i++) {
-            await page.waitForTimeout(2000);
-            const title = await page.title();
-            if (!title.includes('Just a moment') && !title.includes('Attention Required')) {
-                break;
+            const launchOptions: any = {
+                headless: true,
+                args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled']
+            };
+
+            if (options.executablePath) {
+                launchOptions.executablePath = options.executablePath;
             }
+
+            const b = await browserType.launch(launchOptions);
+            try {
+                const context = await b.newContext({
+                    userAgent: ua,
+                    viewport: { width: 1920, height: 1080 }
+                });
+                const page = await context.newPage();
+
+                // Add randomized delay before navigation
+                await page.waitForTimeout(Math.floor(Math.random() * 2000) + 1000);
+
+                const response = await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+                if (!response) throw new Error('No response');
+
+                // Wait for Cloudflare to resolve with improved logic
+                let isResolved = false;
+                for (let i = 0; i < 15; i++) {
+                    await page.waitForTimeout(2000);
+                    const title = await page.title();
+                    const content = await page.content();
+
+                    if (!title.includes('Just a moment') &&
+                        !title.includes('Attention Required') &&
+                        !content.includes('cf-challenge') &&
+                        title !== '') {
+                        isResolved = true;
+                        break;
+                    }
+                    console.log(`[robustFetch] ${options.name} waiting... Title: ${title}`);
+                }
+
+                if (!isResolved) {
+                    console.log(`[robustFetch] ${options.name} failed to resolve challenge.`);
+                    await b.close();
+                    return null;
+                }
+
+                // Final wait for dynamic content
+                await page.waitForTimeout(3000);
+                try {
+                    await page.waitForLoadState('networkidle', { timeout: 10000 });
+                } catch (e) { }
+
+                const finalHtml = await page.content();
+                const finalStatus = response.status();
+                const finalUrl = page.url();
+
+                // If it's still clearly a challenge page, it's a failure
+                if (finalHtml.includes('cf-challenge') || finalHtml.includes('Just a moment')) {
+                    await b.close();
+                    return null;
+                }
+
+                console.log(`[robustFetch] ${options.name} SUCCESS. Status: ${finalStatus}, URL: ${finalUrl}, HTML length: ${finalHtml?.length}`);
+
+                // DUMP TO FILE FOR DEBUGGING
+                const fs = await import('fs/promises');
+                await fs.writeFile('/tmp/cloudflare_debug.html', finalHtml, 'utf8');
+
+                return { html: finalHtml, status: finalStatus, url: finalUrl, browser: b };
+            } catch (err: any) {
+                console.error(`[robustFetch] ${options.name} error: ${err.message}`);
+                await b.close();
+                return null;
+            }
+        };
+
+        const tryRealBrowserBypass = async () => {
+            console.log('[robustFetch] Attempting bypass with puppeteer-real-browser...');
+            try {
+                const { connect } = await import('puppeteer-real-browser');
+                const { browser, page } = await connect({
+                    headless: true,
+                    turnstile: true,
+                    disableXvfb: true,
+                });
+
+                // Add randomized delay
+                await new Promise(r => setTimeout(r, Math.floor(Math.random() * 2000) + 1000));
+
+                await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+
+                let isResolved = false;
+                for (let i = 0; i < 15; i++) {
+                    await new Promise(r => setTimeout(r, 2000));
+                    const title = await page.title();
+                    const content = await page.content();
+
+                    if (!title.includes('Just a moment') &&
+                        !title.includes('Attention Required') &&
+                        !content.includes('cf-challenge') &&
+                        title !== '') {
+                        isResolved = true;
+                        break;
+                    }
+                    console.log(`[robustFetch] puppeteer-real-browser waiting... Title: ${title}`);
+                }
+
+                if (!isResolved) {
+                    console.log('[robustFetch] puppeteer-real-browser failed to resolve challenge.');
+                    await browser.close();
+                    return null;
+                }
+
+                await new Promise(r => setTimeout(r, 3000));
+
+                const finalHtml = await page.content();
+                const finalStatus = 200; // puppeteer-real-browser doesn't always expose the original status easily after challenge
+                const finalUrl = page.url();
+
+                if (finalHtml.includes('cf-challenge') || finalHtml.includes('Just a moment')) {
+                    await browser.close();
+                    return null;
+                }
+
+                console.log(`[robustFetch] puppeteer-real-browser SUCCESS. URL: ${finalUrl}, HTML length: ${finalHtml?.length}`);
+
+                const fs = await import('fs/promises');
+                await fs.writeFile('/tmp/cloudflare_debug.html', finalHtml, 'utf8');
+
+                return { html: finalHtml, status: finalStatus, url: finalUrl, browser };
+            } catch (err: any) {
+                console.error(`[robustFetch] puppeteer-real-browser error: ${err.message}`);
+                return null;
+            }
+        };
+
+        // 1. Try Chromium with system Google Chrome
+        let result = await tryBypass(chromium, { name: 'Chromium (Chrome)', executablePath: '/usr/bin/google-chrome' });
+
+        // 2. Fallback to standard Chromium if Chrome fails
+        if (!result) {
+            result = await tryBypass(chromium, { name: 'Chromium (Default)' });
         }
 
-        // Final network idle wait to ensure page loads after challenge
-        try {
-            await page.waitForLoadState('networkidle', { timeout: 10000 });
-        } catch (e) { /* ignore timeout on networkidle */ }
+        // 3. Fallback to Firefox
+        if (!result) {
+            result = await tryBypass(firefox, { name: 'Firefox' });
+        }
 
-        const finalHtml = await page.content();
-        const finalStatus = response.status();
-        const finalUrl = page.url();
-        console.log(`[robustFetch] Browser bypass done. Status: ${finalStatus}, URL: ${finalUrl}, HTML length: ${finalHtml?.length}`);
+        // 4. Final resort: puppeteer-real-browser
+        if (!result) {
+            result = await tryRealBrowserBypass();
+        }
 
-        // DUMP TO FILE FOR DEBUGGING
-        const fs = await import('fs/promises');
-        await fs.writeFile('/tmp/cloudflare_debug.html', finalHtml, 'utf8');
+        if (result) {
+            const { html, status, url, browser: b } = result;
+            await b.close();
+            return { html, status, url };
+        }
 
-        await browser.close();
-        return { html: finalHtml, status: finalStatus, url: finalUrl };
+        throw new Error('All bypass attempts failed');
+
     } catch (error: any) {
-        console.error(`[robustFetch] Browser error: ${error.message}`);
-        if (browser) await browser.close();
+        console.error(`[robustFetch] Final error: ${error.message}`);
         return { html: '', status: 0, url: targetUrl, error: error.message };
     }
 }
