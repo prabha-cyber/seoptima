@@ -117,6 +117,7 @@ export class Crawler {
             }
         }
 
-        return results;
+        console.log(`[Crawler] Finished. Crawled ${Object.keys(results).length} pages.`);
+        return results || {};
     }
 }
