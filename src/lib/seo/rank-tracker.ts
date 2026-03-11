@@ -34,7 +34,7 @@ export async function updateKeywordRankings(websiteId: string) {
                 );
 
                 if (matchingRow) {
-                    const currentPosition = Math.round(matchingRow.position);
+                    const currentPosition = Math.round(matchingRow.position || 0);
 
                     // Get the last recorded position for comparison
                     const lastRanking = await prisma.keywordRanking.findFirst({
