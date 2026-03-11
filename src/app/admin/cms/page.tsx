@@ -6,6 +6,7 @@ import {
     CheckCircle2, Clock, Globe, Tag, Layers,
     ArrowUpRight, FileText, ChevronRight
 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
 export default function CMSManagementPage() {

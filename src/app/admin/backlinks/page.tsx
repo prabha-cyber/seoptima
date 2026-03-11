@@ -89,7 +89,7 @@ export default function BacklinkDatabasePage() {
                                     </div>
                                 </td>
                                 <td className="px-6 py-4">
-                                    <span className="text-xs font-mono text-brand-300 italic">"{bl.anchorText || 'None'}"</span>
+                                    <span className="text-xs font-mono text-brand-300 italic">&quot;{bl.anchorText || 'None'}&quot;</span>
                                 </td>
                                 <td className="px-6 py-4">
                                     <div className={cn(
