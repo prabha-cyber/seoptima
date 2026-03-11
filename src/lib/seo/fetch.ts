@@ -1,4 +1,6 @@
-import { chromium } from 'playwright';
+import { chromium, firefox } from 'playwright-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import { gotScraping } from 'got-scraping';
 
 const USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
@@ -12,35 +14,36 @@ export async function robustFetch(url: string, useBrowser: boolean = false): Pro
 
     if (!useBrowser) {
         try {
-            const res = await fetch(targetUrl, {
+            console.log(`[robustFetch] Attempting got-scraping for ${targetUrl}`);
+            const response = await gotScraping.get(targetUrl, {
                 headers: {
-                    'User-Agent': ua,
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.9',
-                    'Upgrade-Insecure-Requests': '1',
+                    'user-agent': ua,
                 },
-                redirect: 'follow',
+                timeout: { request: 30000 },
+                retry: { limit: 2 }
             });
 
-            if (res.ok) {
-                const html = await res.text();
-                const isChallenge = html.includes('captcha') || html.includes('cloudflare') || html.includes('Just a moment');
-                if (!isChallenge) {
-                    return { html, status: res.status, url: res.url };
-                }
+            const html = response.body;
+            const isChallenge = html.includes('captcha') || html.includes('cloudflare') || html.includes('Just a moment');
+
+            if (!isChallenge && html.length > 500) {
+                return { html, status: response.statusCode, url: response.url };
             }
+            console.log(`[robustFetch] got-scraping returned challenge or empty content. Falling back to browser if available.`);
         } catch (error: any) {
-            // Fallthrough to browser
+            console.log(`[robustFetch] got-scraping error: ${error.message}. Falling back to browser if available.`);
+            if (error.response) {
+                const html = error.response.body;
+                const isChallenge = html.includes('captcha') || html.includes('cloudflare') || html.includes('Just a moment');
+                // Even if error, if it looks like actual content, maybe use it? 
+                // But usually 403/503 is a block.
+            }
         }
     }
 
+    // Browser fallthrough fallback
     try {
-        const req = eval('require');
-        const { chromium, firefox } = req('playwright-extra');
-        const stealthPluginModule = req('puppeteer-extra-plugin-stealth');
-        const StealthPlugin = stealthPluginModule.default || (stealthPluginModule as any);
-
-        // Standard Playwright Stealth logic remains
+        // Standard Playwright Stealth logic
         const tryBypass = async (browserType: any, options: any) => {
             console.log(`[robustFetch] Attempting bypass with ${options.name}...`);
             const plugin = StealthPlugin();
@@ -50,10 +53,6 @@ export async function robustFetch(url: string, useBrowser: boolean = false): Pro
                 headless: true,
                 args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled']
             };
-
-            if (options.executablePath) {
-                launchOptions.executablePath = options.executablePath;
-            }
 
             const b = await browserType.launch(launchOptions);
             try {
@@ -114,10 +113,8 @@ export async function robustFetch(url: string, useBrowser: boolean = false): Pro
             }
         };
 
-        // Standard Chromium
         let result = await tryBypass(chromium, { name: 'Chromium' });
 
-        // Fallback to Firefox
         if (!result) {
             result = await tryBypass(firefox, { name: 'Firefox' });
         }
@@ -128,7 +125,7 @@ export async function robustFetch(url: string, useBrowser: boolean = false): Pro
             return { html, status, url };
         }
 
-        throw new Error('All bypass attempts failed');
+        throw new Error('All bypass attempts failed (browser unavailable or blocked)');
 
     } catch (error: any) {
         console.error(`[robustFetch] Final error: ${error.message}`);
