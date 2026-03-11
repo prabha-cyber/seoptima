@@ -147,7 +147,7 @@ export default function MonitorPage() {
 
     // Crawl state
     const [crawlingId, setCrawlingId] = useState<string | null>(null);
-    const [crawlFilter, setCrawlFilter] = useState<'all' | 'down' | 'up'>('all');
+    const [crawlFilter, setCrawlFilter] = useState<'all' | 'down' | 'redirect' | 'up'>('all');
 
     const fetchMonitors = useCallback(async (isPolling = false) => {
         try {
