@@ -129,6 +129,7 @@ export async function POST(req: Request) {
             timestamp: new Date().toISOString(),
             pages_count: Object.keys(results).length,
             results,
+            raw_data: crawledPages, // DEBUG
             site_stats: {
                 robots,
                 sitemap
