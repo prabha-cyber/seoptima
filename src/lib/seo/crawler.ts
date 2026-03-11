@@ -48,8 +48,8 @@ export class Crawler {
         try {
             const { url: finalUrlStr, status, html } = await robustFetch(normalizedUrl);
 
-            // Allow 403/503 if we successfully bypassed and got actual HTML back (length > 1000)
-            if ((status >= 400 || status === 0) && (!html || html.length < 1000 || html.includes('Just a moment') || html.includes('cf-challenge'))) {
+            // Allow 403/503 if we successfully bypassed and got actual HTML back (length > 100)
+            if ((status >= 400 || status === 0) && (!html || html.length < 100 || html.includes('Just a moment') || html.includes('cf-challenge'))) {
                 throw new Error(`Initial fetch failed with status ${status}`);
             }
 
@@ -81,8 +81,8 @@ export class Crawler {
 
                 const { html, status, url: effectiveUrl } = await robustFetch(url);
 
-                // Allow 403/503 if we successfully bypassed and got actual HTML back (length > 1000)
-                if ((status >= 400 || status === 0) && (!html || html.length < 1000 || html.includes('Just a moment') || html.includes('cf-challenge'))) {
+                // Allow 403/503 if we successfully bypassed and got actual HTML back (length > 100)
+                if ((status >= 400 || status === 0) && (!html || html.length < 100 || html.includes('Just a moment') || html.includes('cf-challenge'))) {
                     results[url] = { url, html: '', status };
                     continue;
                 }
