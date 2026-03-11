@@ -17,6 +17,7 @@ import { getSearchConsoleData, checkIndexStatus, calculateAuthorityScoring } fro
 import { extractStructuredData, validateStructuredData } from '@/lib/seo/structured-data';
 import { checkBrokenLinks } from '@/lib/seo/links';
 import { getPerformanceMetrics, calculateHeuristicPerformance } from '@/lib/seo/performance';
+import { robustFetch } from '@/lib/seo/fetch';
 
 export async function POST(req: Request) {
     try {
@@ -32,21 +33,12 @@ export async function POST(req: Request) {
         const startTime = Date.now();
 
         // 1. Fetch main document
-        let html = '';
-        let responseStatus = 200;
+        const { html, status: responseStatus, url: finalUrl, error: fetchError } = await robustFetch(targetUrl);
 
-        try {
-            const res = await fetch(targetUrl, {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
-                }
-            });
-            responseStatus = res.status;
-            html = await res.text();
-        } catch (error) {
-            console.error('Fetch error:', error);
+        if (fetchError || responseStatus >= 400 || !html) {
+            console.error('Fetch error:', fetchError || `Status ${responseStatus}`);
             return NextResponse.json({
-                error: 'Failed to fetch the website. Make sure the URL is correct and accessible.'
+                error: fetchError || `Failed to fetch the website (Status ${responseStatus}). Make sure the URL is correct and accessible.`
             }, { status: 400 });
         }
 

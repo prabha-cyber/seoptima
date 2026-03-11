@@ -165,6 +165,7 @@ function TechnicalSeoContent() {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisResult, setAnalysisResult] = useState<any>(null);
     const [selectedPage, setSelectedPage] = useState<string | null>(null);
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
     // When active website changes in context, update url
     useEffect(() => {
@@ -190,6 +191,7 @@ function TechnicalSeoContent() {
         const urlToAnalyze = targetUrl || url;
         if (!urlToAnalyze) return;
         setIsAnalyzing(true);
+        setErrorMsg(null);
         try {
             const res = await fetch('/api/analyze', {
                 method: 'POST',
@@ -212,8 +214,9 @@ function TechnicalSeoContent() {
                 setAnalysisResult({ ...data, isCrawl: false });
                 if (!targetUrl) setSelectedPage(urlToAnalyze);
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Analysis failed', error);
+            setErrorMsg(error?.message || 'Failed to analyze the website. It might be unreachable or blocking automated requests.');
         } finally {
             setIsAnalyzing(false);
         }
@@ -223,6 +226,8 @@ function TechnicalSeoContent() {
         const crawlUrl = targetUrl || url;
         if (!crawlUrl) return;
         setIsAnalyzing(true);
+        setErrorMsg(null);
+        setAnalysisResult(null);
         try {
             const res = await fetch('/api/crawl', {
                 method: 'POST',
@@ -233,6 +238,12 @@ function TechnicalSeoContent() {
 
             if (data.error) {
                 console.error('Crawl error:', data.error);
+                setErrorMsg(data.error);
+                return;
+            }
+
+            if (!data.results || Object.keys(data.results).length === 0) {
+                setErrorMsg('Website returned no pages. It feels strongly protected by systems like Cloudflare or Datadome.');
                 return;
             }
 
@@ -255,8 +266,9 @@ function TechnicalSeoContent() {
                 currentPage: firstUrl
             });
             setSelectedPage(firstUrl);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Crawl failed', error);
+            setErrorMsg(error?.message || 'Failed to analyze the website. It might be unreachable or blocking automated requests.');
         } finally {
             setIsAnalyzing(false);
         }
@@ -341,12 +353,22 @@ function TechnicalSeoContent() {
             </div>
 
             {/* Error Message */}
-            {!isAnalyzing && !analysisResult && url && (
-                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm animate-fade-in flex items-center gap-3">
-                    <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            {errorMsg ? (
+                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 animate-fade-in flex items-start gap-4 shadow-xl">
+                    <div className="bg-red-500/20 p-2 rounded-lg shrink-0">
+                        <AlertTriangle className="w-5 h-5 text-red-500" />
+                    </div>
+                    <div>
+                        <h4 className="text-red-400 font-semibold mb-1">Scan Blocked or Failed</h4>
+                        <p className="text-red-400/80 text-sm leading-relaxed">{errorMsg}</p>
+                    </div>
+                </div>
+            ) : (!isAnalyzing && !analysisResult && url && (
+                <div className="p-4 rounded-xl bg-brand-500/10 border border-brand-500/20 text-brand-400 text-sm animate-fade-in flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
                     Enter a URL and click Analyze to start the audit.
                 </div>
-            )}
+            ))}
 
             {/* Tabs */}
             <div className="flex gap-1 p-1 bg-white/5 rounded-xl border border-white/8 w-fit overflow-x-auto">

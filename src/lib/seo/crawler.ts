@@ -1,5 +1,6 @@
 import * as cheerio from 'cheerio';
 import robotsParser from 'robots-parser';
+import { robustFetch } from './fetch';
 
 export interface CrawlResult {
     url: string;
@@ -21,10 +22,9 @@ export class Crawler {
     private async fetchRobots(baseUrl: string) {
         try {
             const robotsUrl = new URL('/robots.txt', baseUrl).toString();
-            const res = await fetch(robotsUrl);
-            if (res.ok) {
-                const text = await res.text();
-                this.robots = robotsParser(robotsUrl, text);
+            const { html, status } = await robustFetch(robotsUrl);
+            if (status === 200 && html) {
+                this.robots = robotsParser(robotsUrl, html);
             }
         } catch (e) {
             console.error('Failed to fetch robots.txt', e);
@@ -46,15 +46,16 @@ export class Crawler {
 
         // Establish base domain by following initial redirect
         try {
-            const initialRes = await fetch(normalizedUrl, {
-                headers: { 'User-Agent': 'AntigravityCrawler/1.0' },
-                redirect: 'follow',
-                next: { revalidate: 0 }
-            });
+            const { url: finalUrlStr, status, html } = await robustFetch(normalizedUrl);
 
-            const finalUrl = new URL(initialRes.url);
+            // Allow 403/503 if we successfully bypassed and got actual HTML back (length > 1000)
+            if (status >= 400 && (!html || html.length < 1000 || html.includes('Just a moment'))) {
+                throw new Error(`Initial fetch failed with status ${status}`);
+            }
+
+            const finalUrl = new URL(finalUrlStr || normalizedUrl);
             this.domain = finalUrl.hostname.replace(/^www\./, '');
-            normalizedUrl = initialRes.url;
+            normalizedUrl = finalUrl.toString();
 
             console.log(`Base domain established: ${this.domain} from ${normalizedUrl}`);
         } catch (e) {
@@ -78,22 +79,15 @@ export class Crawler {
                 this.visited.add(url);
                 console.log(`Crawling: ${url}`);
 
-                const response = await fetch(url, {
-                    headers: {
-                        'User-Agent': 'AntigravityCrawler/1.0 (SEO Audit Tool)'
-                    },
-                    redirect: 'follow',
-                    next: { revalidate: 0 }
-                });
+                const { html, status, url: effectiveUrl } = await robustFetch(url);
 
-                if (!response.ok) {
-                    results[url] = { url, html: '', status: response.status };
+                // Allow 403/503 if we successfully bypassed and got actual HTML back (length > 1000)
+                if (status >= 400 && (!html || html.length < 1000 || html.includes('Just a moment'))) {
+                    results[url] = { url, html: '', status };
                     continue;
                 }
 
-                const effectiveUrl = response.url;
-                const html = await response.text();
-                results[url] = { url: effectiveUrl, html, status: response.status };
+                results[url] = { url: effectiveUrl, html, status };
 
                 const $ = cheerio.load(html);
                 $('a[href]').each((_, el) => {

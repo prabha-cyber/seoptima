@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { robustFetch } from './fetch';
 import * as htmlparser2 from 'htmlparser2';
 import * as domutils from 'domutils';
 
@@ -6,8 +7,9 @@ export async function checkBrokenLinks(url: string, html?: string) {
     try {
         let content = html;
         if (!content) {
-            const res = await axios.get(url);
-            content = res.data;
+            const { html: fetchedHtml, status } = await robustFetch(url);
+            if (status !== 200 || !fetchedHtml) throw new Error(`Failed to fetch ${url} (Status ${status})`);
+            content = fetchedHtml;
         }
 
         const dom = htmlparser2.parseDocument(content!);

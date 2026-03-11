@@ -152,7 +152,7 @@ export default function ReportTemplateContent() {
 
             {/* ── Report document ────────────────────────────────────────────── */}
             <div
-                className="max-w-[850px] mx-auto my-0 sm:my-8 print:my-0 print:shadow-none"
+                className="max-w-[720px] mx-auto my-0 sm:my-8 print:my-0 print:shadow-none"
                 style={{ background: '#fff', boxShadow: '0 4px 32px rgba(74,85,183,0.10)' }}
             >
 
@@ -321,7 +321,7 @@ export default function ReportTemplateContent() {
                     {/* Footer */}
                     <div style={{ borderTop: '1px solid #e8eaf6', paddingTop: '16px', textAlign: 'center' }}>
                         <p style={{ color: MUTED_TXT, fontSize: '10px', fontWeight: 500, letterSpacing: '0.05em', textTransform: 'uppercase', margin: 0 }}>
-                            Page 1 of 2 — Anti-Gravity SEO Platform
+                            Technical SEO Audit — Seoptima
                         </p>
                     </div>
 

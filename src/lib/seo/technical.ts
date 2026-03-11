@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { robustFetch } from './fetch';
 import robotsParser from 'robots-parser';
 import * as htmlparser2 from 'htmlparser2';
 import * as domutils from 'domutils';
@@ -7,8 +8,12 @@ export async function checkRobots(url: string) {
     try {
         const urlObj = new URL(url);
         const robotsUrl = `${urlObj.protocol}//${urlObj.host}/robots.txt`;
-        const response = await axios.get(robotsUrl);
-        const robots = robotsParser(robotsUrl, response.data);
+        const { html: robotsText, status } = await robustFetch(robotsUrl);
+
+        if (status !== 200 || !robotsText) {
+            return { exists: false, error: 'No robots.txt found' };
+        }
+        const robots = robotsParser(robotsUrl, robotsText);
 
         return {
             exists: true,
@@ -24,8 +29,9 @@ export async function checkSitemap(url: string) {
     try {
         const urlObj = new URL(url);
         const sitemapUrl = `${urlObj.protocol}//${urlObj.host}/sitemap.xml`;
-        const response = await axios.get(sitemapUrl);
-        return { exists: true, url: sitemapUrl, size: response.data.length };
+        const { html: sitemapXml, status } = await robustFetch(sitemapUrl);
+        if (status !== 200 || !sitemapXml) return { exists: false };
+        return { exists: true, url: sitemapUrl, size: sitemapXml.length };
     } catch (error) {
         return { exists: false };
     }
@@ -148,16 +154,15 @@ export async function checkCustom404(baseUrl: string) {
         const randomPath = `/404-test-${Math.random().toString(36).substring(7)}`;
         const testUrl = new URL(randomPath, baseUrl).href;
 
-        const response = await fetch(testUrl);
-        const html = await response.text();
+        const { html: responseHtml, status: responseStatus } = await robustFetch(testUrl);
 
         // If it's 404 and has some content (not a generic browser/server 404)
-        const isCustom = response.status === 404 && html.length > 500 && !html.includes('nginx') && !html.includes('Apache');
+        const isCustom = responseStatus === 404 && responseHtml.length > 500 && !responseHtml.includes('nginx') && !responseHtml.includes('Apache');
 
         return {
-            status: response.status,
+            status: responseStatus,
             isCustom,
-            hasError: response.status !== 404 // Should be 404 for a non-existent page
+            hasError: responseStatus !== 404 // Should be 404 for a non-existent page
         };
     } catch (error) {
         return { isCustom: false, error: 'Failed' };

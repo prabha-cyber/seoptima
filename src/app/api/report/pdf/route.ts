@@ -14,14 +14,16 @@ export async function GET(req: NextRequest) {
     const reportUrl = `${origin}/report?url=${encodeURIComponent(targetUrl)}`;
 
     browser = await chromium.launch();
-    const page = await browser.newPage();
+    const page = await browser.newPage({
+      viewport: { width: 1200, height: 1600 }
+    });
 
     // Navigate to the frontend report page
-    await page.goto(reportUrl, { waitUntil: 'networkidle', timeout: 60000 });
+    await page.goto(reportUrl, { waitUntil: 'load', timeout: 60000 });
 
     // The frontend fetches data from /api/analyze and shows a loading spinner first.
-    // When done, it shows the report container with class .max-w-[850px]
-    await page.waitForSelector('.max-w-\\[850px\\]', { state: 'attached', timeout: 60000 });
+    // When done, it shows the report container with class .max-w-[720px]
+    await page.waitForSelector('.max-w-\\[720px\\]', { state: 'attached', timeout: 60000 });
 
     // Wait a little bit extra to ensure all charts or images are fully rendered
     await page.waitForTimeout(2000);
@@ -30,7 +32,8 @@ export async function GET(req: NextRequest) {
     const pdf = await page.pdf({
       format: 'A4',
       printBackground: true,
-      margin: { top: '0', right: '0', bottom: '0', left: '0' }
+      margin: { top: '10mm', right: '10mm', bottom: '10mm', left: '10mm' },
+      preferCSSPageSize: true
     });
 
     await browser.close();
