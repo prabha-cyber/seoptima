@@ -44,7 +44,8 @@ export default function SystemSettingsPage() {
         }
     };
 
-    const sections = [
+    type FieldDef = { key: string; label: string; type: string; placeholder?: string; options?: string[] };
+    const sections: { title: string; icon: any; fields: FieldDef[] }[] = [
         {
             title: 'General Branding',
             icon: Settings,
