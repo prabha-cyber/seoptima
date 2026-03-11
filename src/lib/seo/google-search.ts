@@ -118,7 +118,7 @@ function extractKeywords(items: GoogleSearchItem[], seedQuery: string): string[]
     }
 
     // Deduplicate and filter to phrases that are actually keyword-like
-    const uniqueWords = [...new Set(words)];
+    const uniqueWords = Array.from(new Set(words));
     return uniqueWords
         .filter(w => w.length > 5 && w.length < 60)
         .filter(w => !w.includes('http') && !w.includes('www'))
