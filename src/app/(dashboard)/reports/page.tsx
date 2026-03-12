@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { FileText, Download, TrendingUp, AlertTriangle, CheckCircle2, Sparkles, Calendar, Loader2, Globe } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useWebsite } from '@/context/website-context';
+import { generateTechnicalSeoPdf } from '@/lib/seo/reports';
 
 export default function ReportsPage() {
     const { activeWebsite, runAnalysis, isAnalyzing } = useWebsite();
@@ -48,7 +49,16 @@ export default function ReportsPage() {
 
     const handleDownloadPdf = (report: any) => {
         const url = activeWebsite?.domain || `https://${activeWebsite?.subdomain}.antigravity.run`;
-        window.open(`/api/report/pdf?url=${encodeURIComponent(url)}`, '_blank');
+        if (report?.fullResults) {
+            try {
+                const results = typeof report.fullResults === 'string' ? JSON.parse(report.fullResults) : report.fullResults;
+                generateTechnicalSeoPdf(url, { results, stats: { performance: { performanceScore: report.speedScore }, score: report.overallScore } });
+            } catch (e) {
+                window.open(`/report?url=${encodeURIComponent(url)}`, '_blank');
+            }
+        } else {
+            window.open(`/report?url=${encodeURIComponent(url)}`, '_blank');
+        }
     };
 
     if (isLoading) {

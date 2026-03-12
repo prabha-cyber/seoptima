@@ -68,6 +68,15 @@ export async function robustFetch(url: string, useBrowser: boolean = false): Pro
         }
 
         if (isChallenge || response.status === 403) {
+            if (process.env.VERCEL) {
+                console.log(`[robustFetch] Vercel environment detected. Skipping Playwright fallback for ${targetUrl}`);
+                return {
+                    html,
+                    status: response.status,
+                    url: response.config.url || targetUrl,
+                    error: 'Analysis blocked by Cloudflare security. This feature requires running the app locally or on a VPS.'
+                };
+            }
             console.log(`[robustFetch] Detected challenge/block for ${targetUrl}. Falling back to browserFetch.`);
             return browserFetch(targetUrl, ua);
         }

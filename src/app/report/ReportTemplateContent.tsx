@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { Loader2, Download, Share2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { EXHAUSTIVE_CHECKS } from '@/lib/seo/checks';
+import { generateTechnicalSeoPdf } from '@/lib/seo/reports';
 
 // ── Colour tokens matching the screenshot ──────────────────────────────────────
 const HEADER_BG = '#4a55b7'; // deep indigo/blue as in screenshot
@@ -62,7 +63,9 @@ export default function ReportTemplateContent() {
     };
 
     const handleDownloadPdf = () => {
-        if (url) window.open(`/api/report/pdf?url=${encodeURIComponent(url)}`, '_blank');
+        if (url && analysisResult) {
+            generateTechnicalSeoPdf(url, analysisResult);
+        }
     };
 
     // ── Loading / error states ─────────────────────────────────────────────────

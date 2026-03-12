@@ -269,7 +269,18 @@ export default function DashboardPage() {
                                     <button
                                         onClick={() => {
                                             const url = activeWebsite.domain || `https://${activeWebsite.subdomain}.antigravity.run`;
-                                            window.open(`/api/report/pdf?url=${encodeURIComponent(url)}`, '_blank');
+                                            if (analysisResult) {
+                                                generateTechnicalSeoPdf(url, analysisResult);
+                                            } else if (latestReport?.fullResults) {
+                                                try {
+                                                    const results = typeof latestReport.fullResults === 'string' ? JSON.parse(latestReport.fullResults) : latestReport.fullResults;
+                                                    generateTechnicalSeoPdf(url, { results, stats: { performance: { performanceScore: latestReport.speedScore }, score: latestReport.overallScore } });
+                                                } catch (e) {
+                                                    window.open(`/report?url=${encodeURIComponent(url)}`, '_blank');
+                                                }
+                                            } else {
+                                                window.open(`/report?url=${encodeURIComponent(url)}`, '_blank');
+                                            }
                                         }}
                                         className="h-8 px-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-xs text-white font-medium transition-all flex items-center gap-2"
                                     >

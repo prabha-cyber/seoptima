@@ -339,7 +339,11 @@ function TechnicalSeoContent() {
                                 onClick={() => {
                                     const targetUrl = selectedPage || url;
                                     if (targetUrl) {
-                                        window.open(`/api/report/pdf?url=${encodeURIComponent(targetUrl)}`, '_blank');
+                                        if (analysisResult) {
+                                            generateTechnicalSeoPdf(targetUrl, analysisResult);
+                                        } else {
+                                            window.open(`/report?url=${encodeURIComponent(targetUrl)}`, '_blank');
+                                        }
                                     }
                                 }}
                                 className="h-[54px] px-6 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-white font-medium transition-all flex items-center justify-center gap-2"
