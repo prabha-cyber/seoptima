@@ -3,11 +3,17 @@ import nodemailer from 'nodemailer';
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: process.env.SMTP_SECURE === 'true',
+  secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+  requireTLS: true,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
+  tls: {
+    rejectUnauthorized: false
+  },
+  logger: true,
+  debug: true
 });
 
 interface DownPage {
@@ -108,15 +114,15 @@ export async function sendDowntimeAlert(
   const subject = `${icon} ALERT: ${downPages.length} page${downPages.length > 1 ? 's' : ''} need attention — ${monitorNamesStr}`;
 
   try {
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: smtpFrom,
       to: emails.join(','),
       subject,
       html,
     });
-    console.log(`[UptimeMonitor] Alert sent to ${emails.length} recipient(s)`);
+    console.log(`[UptimeMonitor] Alert successfully sent to ${emails.length} recipient(s):`, info.messageId);
   } catch (error) {
-    console.error('[UptimeMonitor] Failed to send email:', error);
+    console.error('[UptimeMonitor] CRITICAL: Failed to send email alert:', error);
   }
 }
 
@@ -287,15 +293,15 @@ export async function sendSiteCrawlReport(emails: string[], report: CrawlReportD
       : `✅ Site Report: All ${report.totalPages} pages UP — ${report.siteName}`;
 
   try {
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: smtpFrom,
       to: emails.join(','),
       subject,
       html,
     });
-    console.log(`[SiteCrawl] Report sent to ${emails.length} recipient(s)`);
+    console.log(`[SiteCrawl] Report successfully sent to ${emails.length} recipient(s):`, info.messageId);
   } catch (error) {
-    console.error('[SiteCrawl] Failed to send email:', error);
+    console.error('[SiteCrawl] CRITICAL: Failed to send crawl report:', error);
   }
 }
 

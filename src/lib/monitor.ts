@@ -274,6 +274,7 @@ export async function performSiteCrawl(monitorId: string, maxPages: number = 100
     const alertEmails = monitor.emails.map((e: any) => e.email);
     const issuePages = [...downPages, ...redirectedPages];
     if (alertEmails.length > 0 && issuePages.length > 0) {
+        console.log(`[MonitorUtil] Triggering crawl report email for monitor: ${monitor.name} to: ${alertEmails.join(',')}`);
         await sendSiteCrawlReport(alertEmails, {
             siteName: monitor.name,
             siteUrl: monitor.url,
