@@ -47,12 +47,11 @@ export class Crawler {
         // Establish base domain by following initial redirect
         try {
             console.log(`[Crawler] Initial fetch for ${normalizedUrl}`);
-            const { url: finalUrlStr, status, html } = await robustFetch(normalizedUrl);
+            const { url: finalUrlStr, status, html, error: fetchError } = await robustFetch(normalizedUrl);
             console.log(`[Crawler] Initial fetch status: ${status}, Html length: ${html?.length}`);
 
-            // Allow 403/503 if we successfully bypassed and got actual HTML back (length > 100)
-            if ((status >= 400 || status === 0) && (!html || html.length < 100 || html.includes('Just a moment') || html.includes('cf-challenge'))) {
-                throw new Error(`Initial fetch failed with status ${status}`);
+            if (fetchError || (status >= 400 || status === 0) && (!html || html.length < 100 || html.includes('Just a moment') || html.includes('cf-challenge'))) {
+                throw new Error(fetchError || `Initial fetch failed with status ${status}`);
             }
 
             const finalUrl = new URL(finalUrlStr || normalizedUrl);
@@ -81,13 +80,12 @@ export class Crawler {
                 this.visited.add(url);
                 console.log(`[Crawler] Processing queue item: ${url}`);
 
-                const { html, status, url: effectiveUrl } = await robustFetch(url);
+                const { html, status, url: effectiveUrl, error: fetchError } = await robustFetch(url);
                 console.log(`[Crawler] Queue item fetch result: ${url} -> status ${status}, html length ${html?.length}`);
 
-                // Allow 403/503 if we successfully bypassed and got actual HTML back (length > 100)
-                if ((status >= 400 || status === 0) && (!html || html.length < 100 || html.includes('Just a moment') || html.includes('cf-challenge'))) {
-                    console.error(`[Crawler] Block or failure detected for ${url}`);
-                    results[url] = { url, html: '', status };
+                if (fetchError || (status >= 400 || status === 0) && (!html || html.length < 100 || html.includes('Just a moment') || html.includes('cf-challenge'))) {
+                    console.error(`[Crawler] Block or failure detected for ${url}: ${fetchError || status}`);
+                    results[url] = { url, html: '', status: status || 0 };
                     continue;
                 }
 

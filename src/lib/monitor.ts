@@ -4,6 +4,7 @@ import * as cheerio from 'cheerio';
 import { analyzeTechnical } from './seo/technical';
 import { calculateSeoResults, calculateOverallScore } from './seo/scoring';
 import { checkRobots, checkSitemap, checkCustom404, checkAssetCaching } from './seo/technical';
+import { robustFetch } from './seo/fetch';
 
 // Polyfill for File class in Node.js 18 (required for Next.js 14 / undici)
 if (typeof global.File === 'undefined') {
@@ -37,41 +38,23 @@ export interface PageResult {
 export async function checkSingleUrl(url: string): Promise<PageResult> {
     const start = Date.now();
     try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 15000);
-
-        const res = await fetch(url, {
-            method: 'GET',
-            signal: controller.signal,
-            redirect: 'follow',
-            headers: { 'User-Agent': 'Seoptima-SiteCrawler/1.0' },
-        });
-
-        clearTimeout(timeout);
+        const { html, status, url: finalUrl, error: fetchError } = await robustFetch(url);
         const responseTime = Date.now() - start;
-        const isUp = res.status >= 200 && res.status < 400;
+        const isUp = status >= 200 && status < 400;
+        const redirected = finalUrl !== url;
 
         return {
             url,
-            statusCode: res.status,
+            statusCode: status,
             responseTime,
             isUp,
-            error: isUp ? null : `HTTP ${res.status} ${res.statusText}`,
-            redirected: res.redirected,
-            finalUrl: res.redirected ? res.url : undefined,
+            error: fetchError || (isUp ? null : `HTTP ${status}`),
+            redirected,
+            finalUrl: redirected ? finalUrl : undefined,
         };
     } catch (err: any) {
         const responseTime = Date.now() - start;
-        let error = 'Unknown error';
-
-        if (err.name === 'AbortError') error = 'Request timed out (15s)';
-        else if (err.cause?.code === 'ENOTFOUND') error = 'DNS resolution failed';
-        else if (err.cause?.code === 'ECONNREFUSED') error = 'Connection refused';
-        else if (err.cause?.code === 'ECONNRESET') error = 'Connection reset';
-        else if (err.cause?.code === 'CERT_HAS_EXPIRED') error = 'SSL certificate expired';
-        else error = err.message || 'Failed to connect';
-
-        return { url, statusCode: null, responseTime, isUp: false, error, redirected: false };
+        return { url, statusCode: null, responseTime, isUp: false, error: err.message || 'Failed to connect', redirected: false };
     }
 }
 
@@ -89,13 +72,10 @@ export async function discoverPages(startUrl: string, maxPages: number = 1000): 
     // Establish domain
     let domain = '';
     try {
-        const initialRes = await fetch(normalizedUrl, {
-            headers: { 'User-Agent': 'Seoptima-SiteCrawler/1.0' },
-            redirect: 'follow',
-        });
-        const finalUrl = new URL(initialRes.url);
+        const { url: finalUrlStr, status, html } = await robustFetch(normalizedUrl);
+        const finalUrl = new URL(finalUrlStr || normalizedUrl);
         domain = finalUrl.hostname.replace(/^www\./, '');
-        normalizedUrl = initialRes.url;
+        normalizedUrl = finalUrl.toString();
     } catch {
         return [normalizedUrl]; // At minimum, return the start URL itself
     }
@@ -109,14 +89,10 @@ export async function discoverPages(startUrl: string, maxPages: number = 1000): 
         discovered.push(url);
 
         try {
-            const res = await fetch(url, {
-                headers: { 'User-Agent': 'Seoptima-SiteCrawler/1.0' },
-                redirect: 'follow',
-            });
+            const { html, status, url: effectiveUrl, error: fetchError } = await robustFetch(url);
 
-            if (!res.ok) continue;
+            if (status >= 400 || fetchError || !html) continue;
 
-            const html = await res.text();
             const $ = cheerio.load(html);
 
             $('a[href]').each((_: number, el: any) => {
@@ -197,10 +173,8 @@ export async function performSiteCrawl(monitorId: string, maxPages: number = 100
         let metaDescription = '';
 
         try {
-            // Fetch HTML for analysis (already fetched in discoverPages but we need it here)
-            const res = await fetch(pageUrl, { headers: { 'User-Agent': 'Seoptima-SiteCrawler/1.0' } });
-            if (res.ok) {
-                const html = await res.text();
+            const { html, status, error: fetchError } = await robustFetch(pageUrl);
+            if (status < 400 && !fetchError && html) {
                 const technical = await analyzeTechnical(html, pageUrl);
                 const assets = await checkAssetCaching(pageUrl, html);
 
