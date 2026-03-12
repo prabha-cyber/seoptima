@@ -1,19 +1,39 @@
 import nodemailer from 'nodemailer';
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+const isGmail = (process.env.SMTP_HOST || 'smtp.gmail.com').includes('gmail.com');
+
+const transporterConfig: any = isGmail ? {
+  service: 'gmail',
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+} : {
+  host: process.env.SMTP_HOST,
   port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
-  requireTLS: true,
+  secure: process.env.SMTP_SECURE === 'true',
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
   tls: {
     rejectUnauthorized: false
-  },
+  }
+};
+
+const transporter = nodemailer.createTransport({
+  ...transporterConfig,
   logger: true,
   debug: true
+});
+
+// Verify connection on startup
+transporter.verify(function (error, success) {
+  if (error) {
+    console.error('[Email] Transporter verification failed:', error);
+  } else {
+    console.log('[Email] Server is ready to take our messages');
+  }
 });
 
 interface DownPage {
@@ -32,7 +52,7 @@ export async function sendDowntimeAlert(
 ) {
   if (!emails.length || !downPages.length) return;
 
-  const smtpFrom = process.env.SMTP_FROM || process.env.SMTP_USER || 'monitor@seoptima.com';
+  const smtpFrom = process.env.SMTP_FROM || process.env.SMTP_USER;
 
   const pageRows = downPages
     .map(
@@ -154,7 +174,7 @@ interface CrawlReportData {
 export async function sendSiteCrawlReport(emails: string[], report: CrawlReportData) {
   if (!emails.length) return;
 
-  const smtpFrom = process.env.SMTP_FROM || process.env.SMTP_USER || 'monitor@seoptima.com';
+  const smtpFrom = process.env.SMTP_FROM || process.env.SMTP_USER;
   const hasDown = report.downCount > 0;
   const hasRedirect = (report.redirectCount ?? 0) > 0;
   const uptimePercent = report.totalPages > 0
