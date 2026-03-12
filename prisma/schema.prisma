@@ -669,12 +669,16 @@ model UptimeMonitor {
 }
 
 model MonitorPage {
-  id        String        @id @default(cuid())
-  monitorId String
-  url       String
-  active    Boolean       @default(true)
-  monitor   UptimeMonitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
-  checks    UptimeCheck[]
+  id              String        @id @default(cuid())
+  monitorId       String
+  url             String
+  active          Boolean       @default(true)
+  metaTitle       String?
+  metaDescription String?
+  seoScore        Int?
+  lastAnalyzed    DateTime?
+  monitor         UptimeMonitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  checks          UptimeCheck[]
 
   @@unique([monitorId, url])
   @@map("monitor_pages")
@@ -697,6 +701,7 @@ model UptimeCheck {
   pageId       String?
   statusCode   Int?
   responseTime Int?
+  seoScore     Int?
   isUp         Boolean
   error        String?
   checkedAt    DateTime       @default(now())

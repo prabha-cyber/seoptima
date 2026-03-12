@@ -1,6 +1,9 @@
 import { prisma } from './prisma';
 import { sendSiteCrawlReport } from './email';
 import * as cheerio from 'cheerio';
+import { analyzeTechnical } from './seo/technical';
+import { calculateSeoResults, calculateOverallScore } from './seo/scoring';
+import { checkRobots, checkSitemap, checkCustom404, checkAssetCaching } from './seo/technical';
 
 // Polyfill for File class in Node.js 18 (required for Next.js 14 / undici)
 if (typeof global.File === 'undefined') {
@@ -162,7 +165,13 @@ export async function performSiteCrawl(monitorId: string, maxPages: number = 100
     // Step 1: Discover all pages
     const pages = await discoverPages(monitor.url, maxPages);
     const results: PageResult[] = [];
+    const seoResults: any[] = [];
     const totalPages = pages.length;
+
+    // Get site-wide SEO data once
+    const robots = await checkRobots(monitor.url);
+    const sitemap = await checkSitemap(monitor.url);
+    const custom404 = await checkCustom404(monitor.url);
 
     // Step 2: Save and check pages
     for (let i = 0; i < totalPages; i++) {
@@ -179,6 +188,45 @@ export async function performSiteCrawl(monitorId: string, maxPages: number = 100
             });
         }
 
+        const result = await checkSingleUrl(pageUrl);
+        results.push(result);
+
+        // SEO Analysis
+        let seoScore = 0;
+        let metaTitle = '';
+        let metaDescription = '';
+
+        try {
+            // Fetch HTML for analysis (already fetched in discoverPages but we need it here)
+            const res = await fetch(pageUrl, { headers: { 'User-Agent': 'Seoptima-SiteCrawler/1.0' } });
+            if (res.ok) {
+                const html = await res.text();
+                const technical = await analyzeTechnical(html, pageUrl);
+                const assets = await checkAssetCaching(pageUrl, html);
+
+                const scoredResults = calculateSeoResults({
+                    url: pageUrl,
+                    html,
+                    technical,
+                    performance: { performanceScore: 0 }, // We don't have performance here
+                    robots,
+                    sitemap,
+                    indexStatus: { indexed: true },
+                    assets,
+                    custom404
+                });
+
+                const { score } = calculateOverallScore(scoredResults);
+                seoScore = score;
+                metaTitle = technical.title || '';
+                metaDescription = technical.metaDescription || '';
+            }
+        } catch (e) {
+            console.error(`[MonitorUtil] SEO Analysis failed for ${pageUrl}:`, e);
+        }
+
+        seoResults.push({ url: pageUrl, seoScore, metaTitle, metaDescription });
+
         const monitorPage = await (prisma as any).monitorPage.upsert({
             where: {
                 monitorId_url: {
@@ -186,16 +234,23 @@ export async function performSiteCrawl(monitorId: string, maxPages: number = 100
                     url: pageUrl,
                 },
             },
-            update: { active: true },
+            update: {
+                active: true,
+                metaTitle,
+                metaDescription,
+                seoScore,
+                lastAnalyzed: new Date(),
+            },
             create: {
                 monitorId: monitor.id,
                 url: pageUrl,
                 active: true,
+                metaTitle,
+                metaDescription,
+                seoScore,
+                lastAnalyzed: new Date(),
             },
         });
-
-        const result = await checkSingleUrl(pageUrl);
-        results.push(result);
 
         await (prisma as any).uptimeCheck.create({
             data: {
@@ -203,6 +258,7 @@ export async function performSiteCrawl(monitorId: string, maxPages: number = 100
                 pageId: monitorPage.id,
                 statusCode: result.statusCode,
                 responseTime: result.responseTime,
+                seoScore,
                 isUp: result.isUp,
                 error: result.error ? result.error : (result.redirected ? `Redirected to ${result.finalUrl}` : null),
             },
@@ -252,12 +308,19 @@ export async function performSiteCrawl(monitorId: string, maxPages: number = 100
             downCount: downPages.length,
             redirectCount: redirectedPages.length,
             avgResponseTime,
-            pages: issuePages,
+            pages: results.map((r, idx) => ({
+                ...r,
+                seoScore: seoResults[idx]?.seoScore || 0,
+                responseTime: r.responseTime || 0,
+            })),
             checkedAt: new Date(),
         });
     }
 
-    return { results, summary: { total: results.length, up: upPages.length, down: downPages.length, redirects: redirectedPages.length } };
+    return {
+        results: results.map((r, idx) => ({ ...r, seoScore: seoResults[idx]?.seoScore || 0 })),
+        summary: { total: results.length, up: upPages.length, down: downPages.length, redirects: redirectedPages.length }
+    };
 }
 
 export async function checkAllMonitorPages(monitorId: string) {

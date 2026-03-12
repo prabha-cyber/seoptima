@@ -11,15 +11,16 @@ export async function GET(req: NextRequest) {
   let browser;
   try {
     const { chromium } = await import('playwright');
+    const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
     const reportUrl = `${origin}/report?url=${encodeURIComponent(targetUrl)}`;
 
     browser = await chromium.launch();
-    const page = await browser.newPage({
-      viewport: { width: 1200, height: 1600 }
-    });
+    const context = await browser.newContext({ userAgent: ua });
+    const page = await context.newPage();
+    await page.setViewportSize({ width: 1200, height: 1600 });
 
     // Navigate to the frontend report page
-    await page.goto(reportUrl, { waitUntil: 'load', timeout: 60000 });
+    await page.goto(reportUrl, { waitUntil: 'networkidle', timeout: 60000 });
 
     // The frontend fetches data from /api/analyze and shows a loading spinner first.
     // When done, it shows the report container with class .max-w-[720px]

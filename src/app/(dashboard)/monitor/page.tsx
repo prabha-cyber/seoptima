@@ -63,6 +63,10 @@ interface MonitorSubPage {
     id: string;
     url: string;
     active: boolean;
+    metaTitle: string | null;
+    metaDescription: string | null;
+    seoScore: number | null;
+    lastAnalyzed: string | null;
     checks: UptimeCheck[];
 }
 
@@ -548,10 +552,20 @@ export default function MonitorPage() {
                                                                 return (
                                                                     <div key={page.id} className={cn('flex items-center justify-between p-3 rounded-xl border group transition-all',
                                                                         isDown ? 'bg-red-500/10 border-red-500/30' : (isRedirect ? 'bg-amber-500/10 border-amber-500/30' : 'bg-white/5 border-white/5'))}>
-                                                                        <div className="flex items-center gap-3 min-w-0">
-                                                                            <div className={cn('w-2 h-2 rounded-full', isDown ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : (isRedirect ? 'bg-amber-500 shadow-[0_0_8px_rgba(251,191,36,0.5)]' : 'bg-emerald-500'))} />
-                                                                            <div className="min-w-0">
-                                                                                <p className="text-xs font-mono text-zinc-300 truncate">{page.url}</p>
+                                                                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                                            <div className={cn('w-2 h-2 rounded-full mt-1.5 self-start', isDown ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : (isRedirect ? 'bg-amber-500 shadow-[0_0_8px_rgba(251,191,36,0.5)]' : 'bg-emerald-500'))} />
+                                                                            <div className="min-w-0 flex-1">
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <p className="text-xs font-mono text-zinc-300 truncate">{page.url}</p>
+                                                                                    {page.seoScore !== null && (
+                                                                                        <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded leading-none border',
+                                                                                            page.seoScore > 80 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                                                                                (page.seoScore > 50 ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'))}>
+                                                                                            SEO: {page.seoScore}
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+                                                                                {page.metaTitle && <p className="text-[10px] text-zinc-400 truncate mt-0.5">{page.metaTitle}</p>}
                                                                                 <div className="flex items-center gap-3 mt-1">
                                                                                     <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded', isDown ? 'text-red-400' : (isRedirect ? 'text-amber-400' : 'text-emerald-400'))}>
                                                                                         {isDown ? 'DOWN' : (isRedirect ? 'REDIRECT' : 'UP')}
@@ -561,8 +575,10 @@ export default function MonitorPage() {
                                                                                 </div>
                                                                             </div>
                                                                         </div>
-                                                                        {latest?.error && <div className={cn("hidden md:block text-[10px] max-w-[200px] truncate", isRedirect ? "text-amber-400/80" : "text-red-400/80")}>{latest.error.replace(`[${page.url}] `, '')}</div>}
-                                                                        <div className="w-16"><UptimeBar checks={page.checks} /></div>
+                                                                        <div className="flex items-center gap-4">
+                                                                            {latest?.error && <div className={cn("hidden lg:block text-[10px] max-w-[200px] truncate", isRedirect ? "text-amber-400/80" : "text-red-400/80")}>{latest.error.replace(`[${page.url}] `, '')}</div>}
+                                                                            <div className="w-16"><UptimeBar checks={page.checks} /></div>
+                                                                        </div>
                                                                     </div>
                                                                 );
                                                             })}

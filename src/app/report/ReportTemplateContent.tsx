@@ -141,11 +141,12 @@ export default function ReportTemplateContent() {
                     </button>
                     <button
                         onClick={handleDownloadPdf}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white shadow-sm transition-colors"
+                        disabled={isAnalyzing || !analysisResult}
+                        className={cn("flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white shadow-sm transition-colors", (isAnalyzing || !analysisResult) ? "opacity-50 cursor-not-allowed" : "")}
                         style={{ background: HEADER_BG }}
                     >
                         <Download className="w-4 h-4" />
-                        View Report
+                        Download PDF
                     </button>
                 </div>
             </div>

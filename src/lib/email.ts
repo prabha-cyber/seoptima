@@ -126,6 +126,7 @@ interface CrawlReportPage {
   url: string;
   statusCode: number | null;
   responseTime: number;
+  seoScore?: number;
   isUp: boolean;
   error: string | null;
   redirected?: boolean;
@@ -175,6 +176,11 @@ export async function sendSiteCrawlReport(emails: string[], report: CrawlReportD
             <span style="background:${p.isUp ? (p.redirected ? '#eab308' : '#16a34a') : '#ef4444'};color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">
               ${p.redirected ? 'REDIR' : (p.statusCode ?? 'ERR')}
             </span>
+          </td>
+          <td style="padding:10px 14px;border-bottom:1px solid #2a2a3e;text-align:center;">
+            <div style="background:#818cf820;color:#818cf8;border:1px solid #818cf840;padding:2px 6px;border-radius:6px;font-size:10px;font-weight:800;">
+              ${p.seoScore !== undefined ? p.seoScore : '—'}
+            </div>
           </td>
           <td style="padding:10px 14px;border-bottom:1px solid #2a2a3e;color:#a1a1aa;font-size:12px;max-width:250px;word-break:break-word;">
             ${p.error ? p.error.replace(`[${p.url}] `, '') : (p.redirected ? `Redirected to ${p.finalUrl}` : '—')}
@@ -255,6 +261,7 @@ export async function sendSiteCrawlReport(emails: string[], report: CrawlReportD
                 <th style="padding:10px 14px;text-align:left;color:#818cf8;font-size:10px;text-transform:uppercase;letter-spacing:1px;">Status</th>
                 <th style="padding:10px 14px;text-align:left;color:#818cf8;font-size:10px;text-transform:uppercase;letter-spacing:1px;">Page URL</th>
                 <th style="padding:10px 14px;text-align:center;color:#818cf8;font-size:10px;text-transform:uppercase;letter-spacing:1px;">Code</th>
+                <th style="padding:10px 14px;text-align:center;color:#818cf8;font-size:10px;text-transform:uppercase;letter-spacing:1px;">SEO</th>
                 <th style="padding:10px 14px;text-align:left;color:#818cf8;font-size:10px;text-transform:uppercase;letter-spacing:1px;">Error</th>
                 <th style="padding:10px 14px;text-align:left;color:#818cf8;font-size:10px;text-transform:uppercase;letter-spacing:1px;">Response</th>
               </tr>
