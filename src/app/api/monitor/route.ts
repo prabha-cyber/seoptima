@@ -53,7 +53,7 @@ export async function POST(request: Request) {
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
         const body = await request.json();
-        const { url, name, interval, email } = body;
+        const { url, name, interval, email, type, config, responseTimeThreshold, locations } = body;
 
         if (!url || !name) {
             return NextResponse.json({ error: 'URL and name are required' }, { status: 400 });
@@ -70,7 +70,11 @@ export async function POST(request: Request) {
                 userId: user.id,
                 url: normalizedUrl,
                 name: name.trim(),
+                type: type || 'HTTP',
                 interval: interval || 5,
+                config: typeof config === 'string' ? config : JSON.stringify(config || {}),
+                responseTimeThreshold: responseTimeThreshold || 5000,
+                locations: Array.isArray(locations) ? JSON.stringify(locations) : (locations || '["Global"]'),
             },
             include: { emails: true, checks: true },
         });
@@ -130,7 +134,7 @@ export async function PATCH(request: Request) {
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
         const body = await request.json();
-        const { id, name, url, interval, active } = body;
+        const { id, name, url, interval, active, type, config, responseTimeThreshold, locations } = body;
 
         if (!id) return NextResponse.json({ error: 'Monitor ID required' }, { status: 400 });
 
@@ -145,6 +149,10 @@ export async function PATCH(request: Request) {
         if (url !== undefined) updateData.url = url;
         if (interval !== undefined) updateData.interval = interval;
         if (active !== undefined) updateData.active = active;
+        if (type !== undefined) updateData.type = type;
+        if (config !== undefined) updateData.config = typeof config === 'string' ? config : JSON.stringify(config);
+        if (responseTimeThreshold !== undefined) updateData.responseTimeThreshold = responseTimeThreshold;
+        if (locations !== undefined) updateData.locations = Array.isArray(locations) ? JSON.stringify(locations) : locations;
 
         const monitor = await prisma.uptimeMonitor.update({
             where: { id },

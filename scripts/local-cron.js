@@ -8,7 +8,7 @@ const INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 console.log(`[Local Cron] Started. Pinging ${CRON_URL} every 5 minutes...`);
 
 async function runCron() {
-    console.log(`\n[Local Cron] Triggering API at ${new Date().toLocaleTimeString()}...`);
+    console.log(`\n[Local Cron] [${new Date().toLocaleTimeString()}] Triggering API: ${CRON_URL}...`);
     try {
         const res = await fetch(CRON_URL, {
             method: 'POST',
@@ -19,14 +19,20 @@ async function runCron() {
 
         if (res.ok) {
             const data = await res.json();
-            console.log(`[Local Cron] Success:`, data.message);
+            console.log(`[Local Cron] Success! Found ${data.processed || 0} monitors, Errors: ${data.errors || 0}`);
+            if (data.details && data.details.length > 0) {
+                data.details.forEach(res => {
+                    console.log(` - Crawled "${res.name}": ${res.summary?.total || 0} pages`);
+                });
+            }
         } else {
             console.error(`[Local Cron] Failed with status: ${res.status}`);
             const text = await res.text();
-            console.error(text);
+            console.error(` Response: ${text.substring(0, 200)}...`);
         }
     } catch (err) {
-        console.error(`[Local Cron] Error reaching server. Is Next.js running?`, err.message);
+        console.error(`[Local Cron] Error reaching server: ${err.message}`);
+        console.log(`[Local Cron] Is the Next.js server running at http://localhost:3000?`);
     }
 }
 

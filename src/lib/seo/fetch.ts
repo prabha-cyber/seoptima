@@ -61,13 +61,27 @@ export async function robustFetch(url: string, useBrowser: boolean = false): Pro
         });
 
         const html = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-        const isChallenge = html.includes('captcha') || html.includes('cloudflare') || html.includes('Just a moment') || html.includes('cf-challenge') || html.includes('cf-browser-verification') || response.status === 403;
+
+        // Only detect actual Cloudflare challenge pages, NOT sites that merely use Cloudflare CDN.
+        // Real challenge pages are small (< 50KB) and contain specific challenge markers.
+        const challengeMarkers = [
+            'cf-browser-verification',
+            'cf_chl_opt',
+            'cf-challenge-running',
+            'Checking your browser',
+            'Just a moment',
+        ];
+        const hasChallengeMarker = challengeMarkers.some(marker => html.includes(marker));
+        const hasCaptcha = html.includes('captcha') && html.length < 50000;
+        const hasDbError = html.includes('Error establishing a database connection') || html.includes('Database Error');
+        const isSmallPage = html.length < 50000;
+        const isChallenge = (hasChallengeMarker && isSmallPage) || hasCaptcha || hasDbError || (response.status === 403 && isSmallPage && hasChallengeMarker);
 
         if (!isChallenge && html.length > 500) {
             return { html, status: response.status, url: response.config.url || targetUrl };
         }
 
-        if (isChallenge || response.status === 403) {
+        if (isChallenge) {
             if (process.env.VERCEL) {
                 console.log(`[robustFetch] Vercel environment detected. Skipping Playwright fallback for ${targetUrl}`);
                 return {
@@ -93,10 +107,15 @@ export async function robustFetch(url: string, useBrowser: boolean = false): Pro
 
         // Fallback to basic fetch if axios fails completely
         try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
             const res = await fetch(targetUrl, {
                 headers: { 'User-Agent': ua },
-                redirect: 'follow'
+                redirect: 'follow',
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
             const html = await res.text();
             return { html, status: res.status, url: res.url };
         } catch (fetchError: any) {

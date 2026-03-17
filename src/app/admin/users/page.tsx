@@ -46,9 +46,25 @@ export default function UserManagementPage() {
     };
 
     const toggleSuspension = async (user: any) => {
-        // Mock logic for now as we don't have a 'status' field in schema yet
-        // We can repurpose role or add a field if needed in future
-        alert('Suspension logic would go here (requires schema update for status field)');
+        const newStatus = user.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE';
+        if (!confirm(`Are you sure you want to ${newStatus === 'ACTIVE' ? 'enable' : 'disable'} this user?`)) return;
+
+        try {
+            const res = await fetch(`/api/admin/users/${user.id}/status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus })
+            });
+
+            if (res.ok) {
+                setUsers(users.map(u => u.id === user.id ? { ...u, status: newStatus } : u));
+            } else {
+                const error = await res.json();
+                alert(error.error || 'Failed to update user status');
+            }
+        } catch (error) {
+            alert('Failed to update user status');
+        }
     };
 
     return (
@@ -103,7 +119,7 @@ export default function UserManagementPage() {
                                 <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Role</th>
                                 <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Plan</th>
                                 <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Stats</th>
-                                <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Joined</th>
+                                <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
                                 <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground text-right">Actions</th>
                             </tr>
                         </thead>
@@ -165,32 +181,59 @@ export default function UserManagementPage() {
                                             </span>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 text-xs text-muted-foreground">
-                                        {new Date(user.createdAt).toLocaleDateString()}
+                                    <td className="px-6 py-4">
+                                        <div className={cn(
+                                            "inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold uppercase border",
+                                            user.status === 'ACTIVE'
+                                                ? "bg-green-500/10 text-green-400 border-green-500/20"
+                                                : "bg-red-500/10 text-red-400 border-red-500/20"
+                                        )}>
+                                            <div className={cn(
+                                                "w-1.5 h-1.5 rounded-full",
+                                                user.status === 'ACTIVE' ? "bg-green-400 animate-pulse" : "bg-red-400"
+                                            )} />
+                                            {user.status || 'ACTIVE'}
+                                        </div>
                                     </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <Link
-                                                href={`/admin/users/${user.id}`}
-                                                className="p-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all"
-                                                title="Edit User"
-                                            >
-                                                <Edit2 className="w-3.5 h-3.5" />
-                                            </Link>
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center justify-end gap-3">
+                                            {/* Persistent Toggle */}
                                             <button
                                                 onClick={() => toggleSuspension(user)}
-                                                className="p-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-yellow-500/20 text-muted-foreground hover:text-yellow-400 transition-all"
-                                                title="Suspend/Activate"
+                                                className={cn(
+                                                    "relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 focus:ring-offset-background",
+                                                    user.status === 'ACTIVE' ? 'bg-green-500' : 'bg-white/20'
+                                                )}
+                                                title={user.status === 'ACTIVE' ? 'Disable User' : 'Enable User'}
                                             >
-                                                <Ban className="w-3.5 h-3.5" />
+                                                <span className="sr-only">Toggle status</span>
+                                                <span
+                                                    aria-hidden="true"
+                                                    className={cn(
+                                                        "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                                                        user.status === 'ACTIVE' ? 'translate-x-4' : 'translate-x-0'
+                                                    )}
+                                                />
                                             </button>
-                                            <button
-                                                onClick={() => handleDeleteUser(user.id)}
-                                                className="p-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-red-500/20 text-muted-foreground hover:text-red-400 transition-all"
-                                                title="Delete User"
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
+
+                                            <div className="h-4 w-px bg-white/10 hidden sm:block" />
+
+                                            <div className="flex items-center gap-1 opacity-50 hover:opacity-100 transition-opacity">
+                                                <Link
+                                                    href={`/admin/users/${user.id}`}
+                                                    className="p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all"
+                                                    title="Edit User"
+                                                >
+                                                    <Edit2 className="w-4 h-4" />
+                                                </Link>
+                                                <button
+                                                    onClick={() => handleDeleteUser(user.id)}
+                                                    className="p-1.5 rounded-lg hover:bg-red-500/20 text-muted-foreground hover:text-red-400 transition-all"
+                                                    title="Delete User"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>

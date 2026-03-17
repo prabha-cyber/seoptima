@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import { motion } from 'framer-motion';
+import { useEffect, useState } from 'react';
 import {
     LayoutDashboard, Globe, Search, Sparkles, ShoppingCart,
     BarChart3, Megaphone, Bot, FileText, Settings, LogOut,
@@ -56,6 +57,48 @@ const navItems = [
 export function Sidebar() {
     const pathname = usePathname();
     const { data: session } = useSession();
+    const [featureFlags, setFeatureFlags] = useState<Record<string, boolean>>({});
+
+    useEffect(() => {
+        const fetchFlags = async () => {
+            try {
+                const res = await fetch('/api/admin/features');
+                if (res.ok) {
+                    const data = await res.json();
+                    const flags: Record<string, boolean> = {};
+                    data.forEach((flag: any) => {
+                        flags[flag.name] = flag.enabled;
+                    });
+                    setFeatureFlags(flags);
+                }
+            } catch (error) {
+                console.error('Failed to fetch feature flags');
+            }
+        };
+        fetchFlags();
+    }, []);
+
+    // Helper to check if a feature is enabled
+    const isFeatureEnabled = (href: string) => {
+        // Mapping from User sidebars to Admin sidebar flag names
+        const mapping: Record<string, string> = {
+            '/seo': '/admin/audits',
+            '/technical-seo': '/admin/audits',
+            '/meta-content': '/admin/audits',
+            '/keyword-generator': '/admin/keywords',
+            '/keywords': '/admin/keywords',
+            '/competitors': '/admin/competitors',
+            '/ads': '/admin/competitors',
+            '/reports': '/admin/reports',
+            '/monitor': '/admin/monitor',
+            '/automation': '/admin/automation',
+            '/billing': '/admin/subscriptions',
+        };
+
+        const flagName = mapping[href];
+        if (!flagName) return true; // Default to enabled if no mapping exists
+        return featureFlags[flagName] !== false; // Enable by default unless explicitly disabled
+    };
 
     return (
         <aside className="fixed left-0 top-0 h-full w-64 bg-surface/80 backdrop-blur-xl border-r border-white/8 flex flex-col z-40 custom-scroll overflow-y-auto">
@@ -68,35 +111,40 @@ export function Sidebar() {
 
             {/* Nav */}
             <nav className="flex-1 px-3 py-4 space-y-6">
-                {navItems.map((group) => (
-                    <div key={group.group}>
-                        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 px-3 mb-2">
-                            {group.group}
-                        </p>
-                        <ul className="space-y-0.5">
-                            {group.items.map((item) => {
-                                const Icon = item.icon;
-                                const isActive =
-                                    item.href === '/dashboard'
-                                        ? pathname === '/dashboard'
-                                        : pathname.startsWith(item.href);
+                {navItems.map((group) => {
+                    const visibleItems = group.items.filter(item => isFeatureEnabled(item.href));
+                    if (visibleItems.length === 0) return null;
 
-                                return (
-                                    <li key={item.href}>
-                                        <Link
-                                            href={item.href}
-                                            className={cn('sidebar-item', isActive && 'active')}
-                                        >
-                                            <Icon className="w-4 h-4 flex-shrink-0" />
-                                            <span className="flex-1">{item.label}</span>
-                                            {isActive && <ChevronRight className="w-3 h-3 opacity-60" />}
-                                        </Link>
-                                    </li>
-                                );
-                            })}
-                        </ul>
-                    </div>
-                ))}
+                    return (
+                        <div key={group.group}>
+                            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 px-3 mb-2">
+                                {group.group}
+                            </p>
+                            <ul className="space-y-0.5">
+                                {visibleItems.map((item) => {
+                                    const Icon = item.icon;
+                                    const isActive =
+                                        item.href === '/dashboard'
+                                            ? pathname === '/dashboard'
+                                            : pathname.startsWith(item.href);
+
+                                    return (
+                                        <li key={item.href}>
+                                            <Link
+                                                href={item.href}
+                                                className={cn('sidebar-item', isActive && 'active')}
+                                            >
+                                                <Icon className="w-4 h-4 flex-shrink-0" />
+                                                <span className="flex-1">{item.label}</span>
+                                                {isActive && <ChevronRight className="w-3 h-3 opacity-60" />}
+                                            </Link>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        </div>
+                    );
+                })}
             </nav>
 
             {/* Bottom user card */}

@@ -8,6 +8,7 @@ const nextConfig = {
     ],
   },
   experimental: {
+    instrumentationHook: true,
     serverActions: {
       allowedOrigins: [
         'localhost:3000',
@@ -15,7 +16,7 @@ const nextConfig = {
       ].filter(Boolean),
     },
   },
-  transpilePackages: ['robots-parser', 'sitemap-parser', 'jsonld', 'undici', 'html-encoding-sniffer'],
+  transpilePackages: ['robots-parser', 'sitemap-parser', 'jsonld', 'html-encoding-sniffer'],
 };
 
 module.exports = nextConfig;

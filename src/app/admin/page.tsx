@@ -6,7 +6,8 @@ import {
     Users, Globe, Search, BarChart3, Key, AlertTriangle,
     TrendingUp, ArrowUpRight, ArrowDownRight, Activity,
     Clock, Plus, CheckCircle2, LayoutDashboard, Database,
-    Server, WifiHigh, CreditCard, ChevronRight, Building2
+    Server, WifiHigh, CreditCard, ChevronRight, Building2, Zap, Newspaper, Bot,
+    FileText, Bell
 } from 'lucide-react';
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -19,6 +20,7 @@ import Link from 'next/link';
 export default function AdminDashboardPage() {
     const [data, setData] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [featureFlags, setFeatureFlags] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
         async function fetchStats() {
@@ -32,8 +34,53 @@ export default function AdminDashboardPage() {
                 setIsLoading(false);
             }
         }
+
+        async function fetchFeatures() {
+            try {
+                const res = await fetch('/api/admin/features');
+                if (res.ok) {
+                    const flags = await res.json();
+                    const statusMap: Record<string, boolean> = {};
+                    flags.forEach((flag: any) => {
+                        statusMap[flag.name] = flag.enabled;
+                    });
+                    setFeatureFlags(statusMap);
+                }
+            } catch (error) {
+                console.error('Failed to fetch feature flags');
+            }
+        }
+
         fetchStats();
+        fetchFeatures();
     }, []);
+
+    const toggleFeature = async (href: string) => {
+        const newStatus = !featureFlags[href] && featureFlags[href] !== false ? false : !featureFlags[href];
+        const updatedStatus = featureFlags[href] === undefined ? false : !featureFlags[href];
+
+        // Optimistic UI update
+        setFeatureFlags(prev => ({
+            ...prev,
+            [href]: updatedStatus
+        }));
+
+        try {
+            const res = await fetch('/api/admin/features', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: href, enabled: updatedStatus })
+            });
+
+            if (!res.ok) {
+                setFeatureFlags(prev => ({ ...prev, [href]: !updatedStatus }));
+                alert('Failed to save feature status');
+            }
+        } catch (error) {
+            setFeatureFlags(prev => ({ ...prev, [href]: !updatedStatus }));
+            alert('Error updating feature status');
+        }
+    };
 
     if (isLoading) {
         return (
@@ -50,12 +97,12 @@ export default function AdminDashboardPage() {
     const systemStatus = data?.systemStatus || {};
 
     const statCards = [
-        { label: 'Total Users', value: stats.totalUsers || 0, icon: Users, color: 'text-blue-400', trend: '+12%', trendUp: true, bg: 'bg-blue-500/10' },
-        { label: 'Active Users', value: stats.activeUsers || 0, icon: Activity, color: 'text-green-400', trend: '+5%', trendUp: true, bg: 'bg-green-500/10' },
-        { label: 'Websites Added', value: stats.totalWebsites || 0, icon: Globe, color: 'text-purple-400', trend: '+18%', trendUp: true, bg: 'bg-purple-500/10' },
-        { label: 'SEO Audits', value: stats.totalAudits || 0, icon: Search, color: 'text-orange-400', trend: '+24%', trendUp: true, bg: 'bg-orange-500/10' },
-        { label: 'Keywords Tracked', value: stats.totalKeywords || 0, icon: Key, color: 'text-brand-400', trend: '+8%', trendUp: true, bg: 'bg-brand-500/10' },
-        { label: 'System Errors', value: stats.systemErrors || 0, icon: AlertTriangle, color: 'text-red-400', trend: '0%', trendUp: true, bg: 'bg-red-500/10' },
+        { label: 'Total Users', value: stats.totalUsers || 0, icon: Users, color: 'text-blue-400', trend: '', trendUp: true, bg: 'bg-blue-500/10' },
+        { label: 'Active Users', value: stats.activeUsers || 0, icon: Activity, color: 'text-green-400', trend: '', trendUp: true, bg: 'bg-green-500/10' },
+        { label: 'Websites Added', value: stats.totalWebsites || 0, icon: Globe, color: 'text-purple-400', trend: '', trendUp: true, bg: 'bg-purple-500/10' },
+        { label: 'SEO Audits', value: stats.totalAudits || 0, icon: Search, color: 'text-orange-400', trend: '', trendUp: true, bg: 'bg-orange-500/10' },
+        { label: 'Keywords Tracked', value: stats.totalKeywords || 0, icon: Key, color: 'text-brand-400', trend: '', trendUp: true, bg: 'bg-brand-500/10' },
+        { label: 'System Errors', value: stats.systemErrors || 0, icon: AlertTriangle, color: 'text-red-400', trend: '', trendUp: true, bg: 'bg-red-500/10' },
     ];
 
     const quickActions = [
@@ -96,13 +143,15 @@ export default function AdminDashboardPage() {
                             <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 group-hover:bg-white/10 transition-colors shadow-inner">
                                 <stat.icon className={cn("w-5 h-5", stat.color)} />
                             </div>
-                            <div className={cn(
-                                "flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-full",
-                                stat.trendUp ? "bg-green-500/10 text-green-400 border border-green-500/20" : "bg-red-500/10 text-red-400 border border-red-500/20"
-                            )}>
-                                {stat.trendUp ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                                {stat.trend}
-                            </div>
+                            {stat.trend && (
+                                <div className={cn(
+                                    "flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-full",
+                                    stat.trendUp ? "bg-green-500/10 text-green-400 border border-green-500/20" : "bg-red-500/10 text-red-400 border border-red-500/20"
+                                )}>
+                                    {stat.trendUp ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                                    {stat.trend}
+                                </div>
+                            )}
                         </div>
                         <h3 className="text-3xl font-bold tracking-tight mb-1 relative z-10">{stat.value.toLocaleString()}</h3>
                         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider relative z-10">{stat.label}</p>
@@ -113,6 +162,59 @@ export default function AdminDashboardPage() {
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                 {/* Main Charts Area */}
                 <div className="xl:col-span-2 space-y-6">
+                    {/* Feature Management Controls */}
+                    <div className="glass-card p-6 border-brand-500/20 bg-brand-500/[0.02]">
+                        <div className="flex items-center justify-between mb-6">
+                            <div>
+                                <h3 className="text-lg font-bold flex items-center gap-2">
+                                    <Zap className="w-5 h-5 text-brand-400" />
+                                    Global Feature Management
+                                </h3>
+                                <p className="text-xs text-muted-foreground mt-1">Enable or disable platform features globally for all users.</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {[
+                                { label: 'SEO Audits', href: '/admin/audits', icon: Search },
+                                { label: 'Keyword Tools', href: '/admin/keywords', icon: Key },
+                                { label: 'Competitor Data', href: '/admin/competitors', icon: BarChart3 },
+                                { label: 'Backlink Analysis', href: '/admin/backlinks', icon: Activity },
+                                { label: 'Reports System', href: '/admin/reports', icon: FileText },
+                                { label: 'API Access', href: '/admin/api', icon: Database },
+                                { label: 'Subscriptions', href: '/admin/subscriptions', icon: CreditCard },
+                                { label: 'Notifications', href: '/admin/notifications', icon: Bell },
+                                { label: 'Uptime Monitoring', href: '/admin/monitor', icon: Activity },
+                                { label: 'Automation', href: '/admin/automation', icon: Bot },
+                                { label: 'Blog / CMS', href: '/admin/cms', icon: Newspaper },
+                            ].map((feature) => (
+                                <div key={feature.href} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition-colors">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-1.5 rounded-lg bg-white/5">
+                                            <feature.icon className="w-4 h-4 text-muted-foreground" />
+                                        </div>
+                                        <span className="text-sm font-medium">{feature.label}</span>
+                                    </div>
+                                    <div
+                                        onClick={() => toggleFeature(feature.href)}
+                                        className={cn(
+                                            "relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                                            featureFlags[feature.href] !== false ? 'bg-brand-500' : 'bg-white/20'
+                                        )}
+                                    >
+                                        <span
+                                            aria-hidden="true"
+                                            className={cn(
+                                                "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                                                featureFlags[feature.href] !== false ? 'translate-x-4' : 'translate-x-0'
+                                            )}
+                                        />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
                     {/* User Growth & Website Activity Charts */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div className="glass-card p-6 border-white/10">

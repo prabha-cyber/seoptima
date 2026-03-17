@@ -40,6 +40,28 @@ export default function WebsiteManagementPage() {
         }
     };
 
+    const toggleStatus = async (site: any) => {
+        const newStatus = site.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE';
+        if (!confirm(`Are you sure you want to ${newStatus === 'ACTIVE' ? 'enable' : 'disable'} this website?`)) return;
+
+        try {
+            const res = await fetch(`/api/admin/websites/${site.id}/status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus })
+            });
+
+            if (res.ok) {
+                setWebsites(websites.map(w => w.id === site.id ? { ...w, status: newStatus } : w));
+            } else {
+                const error = await res.json();
+                alert(error.error || 'Failed to update website status');
+            }
+        } catch (error) {
+            alert('Failed to update website status');
+        }
+    };
+
     const triggerAudit = async (id: string) => {
         alert('Audit trigger logic would go here (calling technical SEO audit API)');
     };
@@ -86,6 +108,7 @@ export default function WebsiteManagementPage() {
                                 <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Website</th>
                                 <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Owner</th>
                                 <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">SEO Status</th>
+                                <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
                                 <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Pages</th>
                                 <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Added</th>
                                 <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground text-right">Actions</th>
@@ -154,34 +177,71 @@ export default function WebsiteManagementPage() {
                                                 </div>
                                             )}
                                         </td>
+                                        <td className="px-6 py-4">
+                                            <div className={cn(
+                                                "inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold uppercase border",
+                                                site.status === 'ACTIVE'
+                                                    ? "bg-green-500/10 text-green-400 border-green-500/20"
+                                                    : "bg-red-500/10 text-red-400 border-red-500/20"
+                                            )}>
+                                                <div className={cn(
+                                                    "w-1.5 h-1.5 rounded-full",
+                                                    site.status === 'ACTIVE' ? "bg-green-400 animate-pulse" : "bg-red-400"
+                                                )} />
+                                                {site.status || 'ACTIVE'}
+                                            </div>
+                                        </td>
                                         <td className="px-6 py-4 text-xs font-medium text-foreground">
                                             {site._count?.pages || 0} Pages
                                         </td>
                                         <td className="px-6 py-4 text-xs text-muted-foreground">
                                             {new Date(site.createdAt).toLocaleDateString()}
                                         </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center justify-end gap-3">
+                                                {/* Persistent Toggle */}
                                                 <button
-                                                    onClick={() => triggerAudit(site.id)}
-                                                    className="p-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-brand-500/20 text-muted-foreground hover:text-brand-400 transition-all"
-                                                    title="Run SEO Audit"
+                                                    onClick={() => toggleStatus(site)}
+                                                    className={cn(
+                                                        "relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 focus:ring-offset-background",
+                                                        site.status === 'ACTIVE' ? 'bg-green-500' : 'bg-white/20'
+                                                    )}
+                                                    title={site.status === 'ACTIVE' ? 'Disable Website' : 'Enable Website'}
                                                 >
-                                                    <SearchCode className="w-3.5 h-3.5" />
+                                                    <span className="sr-only">Toggle status</span>
+                                                    <span
+                                                        aria-hidden="true"
+                                                        className={cn(
+                                                            "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                                                            site.status === 'ACTIVE' ? 'translate-x-4' : 'translate-x-0'
+                                                        )}
+                                                    />
                                                 </button>
-                                                <button
-                                                    className="p-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all"
-                                                    title="View Site Builder"
-                                                >
-                                                    <LayoutGrid className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDelete(site.id)}
-                                                    className="p-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-red-500/20 text-muted-foreground hover:text-red-400 transition-all"
-                                                    title="Delete Website"
-                                                >
-                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                </button>
+
+                                                <div className="h-4 w-px bg-white/10 hidden sm:block" />
+
+                                                <div className="flex items-center gap-1 opacity-50 hover:opacity-100 transition-opacity">
+                                                    <button
+                                                        onClick={() => triggerAudit(site.id)}
+                                                        className="p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all"
+                                                        title="Run Technical Audit"
+                                                    >
+                                                        <SearchCode className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        className="p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all"
+                                                        title="View Site Builder"
+                                                    >
+                                                        <LayoutGrid className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDelete(site.id)}
+                                                        className="p-1.5 rounded-lg hover:bg-red-500/20 text-muted-foreground hover:text-red-400 transition-all"
+                                                        title="Delete Website"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
                                             </div>
                                         </td>
                                     </tr>

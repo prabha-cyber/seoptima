@@ -37,6 +37,67 @@ export async function checkSitemap(url: string) {
     }
 }
 
+export async function extractSitemapUrls(url: string): Promise<string[]> {
+    const tryPaths = [
+        '/sitemap_index.xml',
+        '/sitemap.xml',
+        '/wp-sitemap.xml',
+        '/sitemap_index.xml.gz'
+    ];
+
+    const urlObj = new URL(url);
+    const discoveredUrls = new Set<string>();
+
+    for (const path of tryPaths) {
+        try {
+            const sitemapUrl = `${urlObj.protocol}//${urlObj.host}${path}`;
+            console.log(`[Technical] Fetching sitemap: ${sitemapUrl}`);
+            const { html: sitemapXml, status } = await robustFetch(sitemapUrl);
+
+            if (status !== 200 || !sitemapXml || sitemapXml.length < 50) continue;
+
+            // Check if it's a sitemap index (contains <sitemap> or points to other .xml files)
+            if (sitemapXml.includes('<sitemap>')) {
+                const sitemapIndexMatches = sitemapXml.match(/<loc>(.*?)<\/loc>/g);
+                if (sitemapIndexMatches) {
+                    console.log(`[Technical] Sitemap index found with ${sitemapIndexMatches.length} sub-sitemaps`);
+                    for (const match of sitemapIndexMatches) {
+                        const subSitemapUrl = match.replace('<loc>', '').replace('</loc>', '').trim();
+                        if (subSitemapUrl.startsWith('http')) {
+                            console.log(`[Technical] Fetching sub-sitemap: ${subSitemapUrl}`);
+                            const { html: subXml, status: subStatus } = await robustFetch(subSitemapUrl);
+                            if (subStatus === 200 && subXml) {
+                                extractLocsFromXml(subXml, discoveredUrls);
+                            }
+                        }
+                    }
+                }
+            } else {
+                extractLocsFromXml(sitemapXml, discoveredUrls);
+            }
+
+            if (discoveredUrls.size > 0) break; // Found something, stop searching other paths
+        } catch (error) {
+            console.error(`[Technical] Error fetching sitemap path ${path}:`, error);
+        }
+    }
+
+    function extractLocsFromXml(xml: string, set: Set<string>) {
+        const locMatches = xml.match(/<loc>(.*?)<\/loc>/g);
+        if (locMatches) {
+            locMatches.forEach(match => {
+                const loc = match.replace('<loc>', '').replace('</loc>', '').trim();
+                if (loc.startsWith('http') && !loc.endsWith('.xml') && !loc.endsWith('.xml.gz')) {
+                    set.add(loc);
+                }
+            });
+        }
+    }
+
+    console.log(`[Technical] Total extracted unique URLs from sitemap: ${discoveredUrls.size}`);
+    return Array.from(discoveredUrls);
+}
+
 export async function analyzeTechnical(html: string, url: string) {
     const dom = htmlparser2.parseDocument(html);
 

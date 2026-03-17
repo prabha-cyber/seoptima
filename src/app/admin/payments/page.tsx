@@ -13,9 +13,13 @@ import { cn } from '@/lib/utils';
 export default function PaymentsManagementPage() {
     const [payments, setPayments] = useState<any[]>([]);
     const [gateways, setGateways] = useState<any[]>([]);
+    const [stats, setStats] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'history' | 'gateways'>('history');
+    const [editingGateway, setEditingGateway] = useState<any>(null);
     const [showKey, setShowKey] = useState<string | null>(null);
+    const [priceIds, setPriceIds] = useState({ growth: '', pro: '', agency: '' });
+    const [appUrl, setAppUrl] = useState('');
 
     useEffect(() => {
         fetchData();
@@ -27,7 +31,10 @@ export default function PaymentsManagementPage() {
             const res = await fetch(`/api/admin/payments?type=${activeTab}`);
             const data = await res.json();
             if (res.ok) {
-                if (activeTab === 'history') setPayments(data);
+                if (activeTab === 'history') {
+                    setPayments(data.payments || []);
+                    setStats(data.stats);
+                }
                 else setGateways(data);
             }
         } catch (err) {
@@ -39,14 +46,41 @@ export default function PaymentsManagementPage() {
 
     const handleGatewayUpdate = async (gateway: any) => {
         try {
+            // Include priceIds and appUrl into config before saving
+            const updatedConfig = gateway.name === 'Stripe'
+                ? JSON.stringify({
+                    growthPriceId: priceIds.growth,
+                    proPriceId: priceIds.pro,
+                    agencyPriceId: priceIds.agency,
+                    appUrl: appUrl
+                })
+                : gateway.config;
+
             const res = await fetch('/api/admin/payments', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(gateway),
+                body: JSON.stringify({ ...gateway, config: updatedConfig }),
             });
-            if (res.ok) alert('Gateway updated successfully');
+            if (res.ok) {
+                alert('Gateway updated successfully');
+                setEditingGateway(null);
+                fetchData();
+            }
         } catch (err) {
             alert('Failed to update gateway');
+        }
+    };
+
+    const startEditing = (gw: any) => {
+        setEditingGateway(gw);
+        if (gw.name === 'Stripe') {
+            const config = gw.config ? JSON.parse(gw.config) : {};
+            setPriceIds({
+                growth: config.growthPriceId || '',
+                pro: config.proPriceId || '',
+                agency: config.agencyPriceId || ''
+            });
+            setAppUrl(config.appUrl || '');
         }
     };
 
@@ -57,25 +91,35 @@ export default function PaymentsManagementPage() {
                     <h1 className="text-2xl font-bold font-display tracking-tight text-white">Revenue & Gateways</h1>
                     <p className="text-muted-foreground mt-1 text-sm">Monitor platform revenue and configure payment processing.</p>
                 </div>
-                <div className="flex items-center gap-2 p-1 bg-white/5 rounded-xl border border-white/10">
-                    <button
-                        onClick={() => setActiveTab('history')}
-                        className={cn(
-                            "px-4 py-2 text-sm font-medium rounded-lg transition-all flex items-center gap-2",
-                            activeTab === 'history' ? "bg-brand-500 text-white shadow-lg shadow-brand-500/20" : "text-muted-foreground hover:text-white"
-                        )}
-                    >
-                        <Clock className="w-4 h-4" /> Payment History
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('gateways')}
-                        className={cn(
-                            "px-4 py-2 text-sm font-medium rounded-lg transition-all flex items-center gap-2",
-                            activeTab === 'gateways' ? "bg-brand-500 text-white shadow-lg shadow-brand-500/20" : "text-muted-foreground hover:text-white"
-                        )}
-                    >
-                        <Shield className="w-4 h-4" /> Gateway Settings
-                    </button>
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 p-1 bg-white/5 rounded-xl border border-white/10">
+                        <button
+                            onClick={() => setActiveTab('history')}
+                            className={cn(
+                                "px-4 py-2 text-sm font-medium rounded-lg transition-all flex items-center gap-2",
+                                activeTab === 'history' ? "bg-brand-500 text-white shadow-lg shadow-brand-500/20" : "text-muted-foreground hover:text-white"
+                            )}
+                        >
+                            <Clock className="w-4 h-4" /> Payment History
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('gateways')}
+                            className={cn(
+                                "px-4 py-2 text-sm font-medium rounded-lg transition-all flex items-center gap-2",
+                                activeTab === 'gateways' ? "bg-brand-500 text-white shadow-lg shadow-brand-500/20" : "text-muted-foreground hover:text-white"
+                            )}
+                        >
+                            <Shield className="w-4 h-4" /> Gateway Settings
+                        </button>
+                    </div>
+                    {activeTab === 'gateways' && (
+                        <button
+                            onClick={() => startEditing({ name: 'Stripe', isEnabled: true, isLive: false })}
+                            className="btn-primary flex items-center gap-2 py-2 px-4 h-full"
+                        >
+                            <CreditCard className="w-4 h-4" /> Add Gateway
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -84,10 +128,10 @@ export default function PaymentsManagementPage() {
                     {/* Revenue Stats */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         {[
-                            { label: 'Total Revenue', value: '$12,450', trend: '+12%', icon: TrendingUp, color: 'text-green-400', bg: 'bg-green-500/10' },
-                            { label: 'Active Subscriptions', value: '142', trend: '+8%', icon: CreditCard, color: 'text-blue-400', bg: 'bg-blue-500/10' },
-                            { label: 'Pending Orders', value: '12', trend: '-2%', icon: Clock, color: 'text-orange-400', bg: 'bg-orange-500/10' },
-                            { label: 'Refunded', value: '$450', trend: '0%', icon: ArrowDownRight, color: 'text-red-400', bg: 'bg-red-500/10' },
+                            { label: 'Total Revenue', value: stats?.totalRevenue?.toLocaleString('en-US', { style: 'currency', currency: 'USD' }) || '$0.00', trend: '', icon: TrendingUp, color: 'text-green-400', bg: 'bg-green-500/10' },
+                            { label: 'Active Subscriptions', value: stats?.activeSubscriptions || '0', trend: '', icon: CreditCard, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+                            { label: 'Pending Orders', value: stats?.pendingOrders || '0', trend: '', icon: Clock, color: 'text-orange-400', bg: 'bg-orange-500/10' },
+                            { label: 'Refunded', value: stats?.refunded?.toLocaleString('en-US', { style: 'currency', currency: 'USD' }) || '$0.00', trend: '', icon: ArrowDownRight, color: 'text-red-400', bg: 'bg-red-500/10' },
                         ].map((stat, i) => (
                             <div key={i} className="glass-card p-4 relative overflow-hidden group hover:border-white/20 transition-all">
                                 <div className={cn("absolute -right-4 -top-4 w-16 h-16 rounded-full blur-2xl opacity-20", stat.bg)}></div>
@@ -97,7 +141,7 @@ export default function PaymentsManagementPage() {
                                 </div>
                                 <div className="flex items-baseline gap-2">
                                     <h4 className="text-2xl font-bold font-display">{stat.value}</h4>
-                                    <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded", stat.trend.startsWith('+') ? "text-green-400 bg-green-500/5" : "text-red-400 bg-red-500/5")}>{stat.trend}</span>
+                                    {stat.trend && <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded", stat.trend.startsWith('+') ? "text-green-400 bg-green-500/5" : "text-red-400 bg-red-500/5")}>{stat.trend}</span>}
                                 </div>
                             </div>
                         ))}
@@ -178,7 +222,13 @@ export default function PaymentsManagementPage() {
                         <div className="col-span-full glass-card p-12 text-center border-dashed">
                             <Settings className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
                             <h3 className="text-lg font-semibold text-muted-foreground">No gateways configured</h3>
-                            <p className="text-sm text-muted-foreground/60 mt-1">Add your first payment provider in the schema to start processing transactions.</p>
+                            <p className="text-sm text-muted-foreground/60 mt-1">Add your first payment provider to start processing transactions.</p>
+                            <button
+                                onClick={() => startEditing({ name: 'Stripe', isEnabled: true, isLive: false })}
+                                className="btn-primary mt-6 flex items-center gap-2 mx-auto"
+                            >
+                                <CreditCard className="w-4 h-4" /> Add Stripe Gateway
+                            </button>
                         </div>
                     ) : gateways.map((gw) => (
                         <div key={gw.id} className="glass-card p-6 flex flex-col group hover:border-brand-500/30 transition-all">
@@ -249,7 +299,10 @@ export default function PaymentsManagementPage() {
                                 <div className="text-[10px] text-muted-foreground italic flex items-center gap-2">
                                     <Clock className="w-3 h-3" /> Last updated: {new Date(gw.updatedAt).toLocaleTimeString()}
                                 </div>
-                                <button className="btn-secondary py-1.5 px-4 text-xs font-bold border-brand-500/10 hover:border-brand-500/30 group/btn">
+                                <button
+                                    onClick={() => startEditing(gw)}
+                                    className="btn-secondary py-1.5 px-4 text-xs font-bold border-brand-500/10 hover:border-brand-500/30 group/btn"
+                                >
                                     Configure API
                                     <ExternalLink className="w-3 h-3 ml-2 opacity-30 group-hover/btn:opacity-100 transition-opacity" />
                                 </button>
@@ -258,6 +311,178 @@ export default function PaymentsManagementPage() {
                     ))}
                 </div>
             )}
+
+            {/* Edit Modal */}
+            <AnimatePresence>
+                {editingGateway && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setEditingGateway(null)}
+                            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            className="glass-card w-full max-w-lg p-6 relative z-10 overflow-hidden"
+                        >
+                            <div className="flex items-center gap-4 mb-6">
+                                <div className="p-3 rounded-xl bg-brand-500/20 text-brand-400">
+                                    <Settings className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold">{editingGateway.id ? 'Configure' : 'Add'} {editingGateway.name}</h3>
+                                    <p className="text-xs text-muted-foreground mt-0.5">{editingGateway.id ? 'Manage API keys and environment settings.' : 'Setup a new payment gateway provider.'}</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                {!editingGateway.id && (
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Gateway Name</label>
+                                        <select
+                                            className="input-base w-full text-sm appearance-none bg-black/40"
+                                            value={editingGateway.name}
+                                            onChange={(e) => setEditingGateway({ ...editingGateway, name: e.target.value })}
+                                        >
+                                            <option value="Stripe">Stripe</option>
+                                            <option value="PayPal">PayPal</option>
+                                            <option value="Razorpay">Razorpay</option>
+                                        </select>
+                                    </div>
+                                )}
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Status</label>
+                                        <button
+                                            onClick={() => setEditingGateway({ ...editingGateway, isEnabled: !editingGateway.isEnabled })}
+                                            className={cn(
+                                                "w-full flex items-center justify-center gap-2 py-2 rounded-lg border text-xs font-bold transition-all",
+                                                editingGateway.isEnabled ? "bg-green-500/10 text-green-400 border-green-500/20" : "bg-red-500/10 text-red-400 border-red-500/20"
+                                            )}
+                                        >
+                                            {editingGateway.isEnabled ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                                            {editingGateway.isEnabled ? 'ENABLED' : 'DISABLED'}
+                                        </button>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Mode</label>
+                                        <button
+                                            onClick={() => setEditingGateway({ ...editingGateway, isLive: !editingGateway.isLive })}
+                                            className={cn(
+                                                "w-full flex items-center justify-center gap-2 py-2 rounded-lg border text-xs font-bold transition-all",
+                                                editingGateway.isLive ? "bg-brand-500/10 text-brand-400 border-brand-500/20" : "bg-orange-500/10 text-orange-400 border-orange-500/20"
+                                            )}
+                                        >
+                                            {editingGateway.isLive ? <Globe className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
+                                            {editingGateway.isLive ? 'LIVE' : 'SANDBOX'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Public Key / Client ID</label>
+                                    <input
+                                        type="text"
+                                        className="input-base w-full text-sm font-mono"
+                                        value={editingGateway.publicKey || ''}
+                                        onChange={(e) => setEditingGateway({ ...editingGateway, publicKey: e.target.value })}
+                                    />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Secret Key</label>
+                                    <input
+                                        type="password"
+                                        className="input-base w-full text-sm font-mono"
+                                        value={editingGateway.secretKey || ''}
+                                        onChange={(e) => setEditingGateway({ ...editingGateway, secretKey: e.target.value })}
+                                    />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Webhook Secret</label>
+                                    <input
+                                        type="password"
+                                        className="input-base w-full text-sm font-mono"
+                                        value={editingGateway.webhookSecret || ''}
+                                        onChange={(e) => setEditingGateway({ ...editingGateway, webhookSecret: e.target.value })}
+                                    />
+                                </div>
+
+                                {editingGateway.name === 'Stripe' && (
+                                    <>
+                                        <div className="pt-2 border-t border-white/5 mt-4">
+                                            <label className="text-[10px] font-bold uppercase tracking-widest text-brand-400">Plan Price IDs (Integration)</label>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            <div className="space-y-1">
+                                                <label className="text-[9px] text-muted-foreground">Growth</label>
+                                                <input
+                                                    type="text"
+                                                    placeholder="price_..."
+                                                    className="input-base w-full text-[10px] p-2"
+                                                    value={priceIds.growth}
+                                                    onChange={(e) => setPriceIds({ ...priceIds, growth: e.target.value })}
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[9px] text-muted-foreground">Pro</label>
+                                                <input
+                                                    type="text"
+                                                    placeholder="price_..."
+                                                    className="input-base w-full text-[10px] p-2"
+                                                    value={priceIds.pro}
+                                                    onChange={(e) => setPriceIds({ ...priceIds, pro: e.target.value })}
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[9px] text-muted-foreground">Agency</label>
+                                                <input
+                                                    type="text"
+                                                    placeholder="price_..."
+                                                    className="input-base w-full text-[10px] p-2"
+                                                    value={priceIds.agency}
+                                                    onChange={(e) => setPriceIds({ ...priceIds, agency: e.target.value })}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">App URL (for redirects)</label>
+                                            <input
+                                                type="text"
+                                                placeholder="https://..."
+                                                className="input-base w-full text-xs"
+                                                value={appUrl}
+                                                onChange={(e) => setAppUrl(e.target.value)}
+                                            />
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+
+                            <div className="flex gap-3 mt-8">
+                                <button
+                                    onClick={() => setEditingGateway(null)}
+                                    className="flex-1 btn-secondary py-2"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => handleGatewayUpdate(editingGateway)}
+                                    className="flex-1 btn-primary py-2"
+                                >
+                                    Save Changes
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

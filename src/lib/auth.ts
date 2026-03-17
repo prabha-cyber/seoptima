@@ -48,12 +48,16 @@ export const authOptions: NextAuthOptions = {
                 token.role = (user as any).role;
             } else if (token.id) {
                 // Fetch latest role from DB to support real-time promotion
-                const dbUser = await prisma.user.findUnique({
-                    where: { id: token.id as string },
-                    select: { role: true },
-                });
-                if (dbUser) {
-                    token.role = dbUser.role;
+                try {
+                    const dbUser = await prisma.user.findUnique({
+                        where: { id: token.id as string },
+                        select: { role: true },
+                    });
+                    if (dbUser) {
+                        token.role = dbUser.role;
+                    }
+                } catch (e) {
+                    // Keep existing role if DB fetch fails
                 }
             }
             return token;

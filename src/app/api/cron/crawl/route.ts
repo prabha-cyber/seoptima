@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { performSiteCrawl } from '@/lib/monitor';
+import { performSiteCrawl, checkAllMonitorPages, checkMainUrlOnly } from '@/lib/monitor';
 
 // POST /api/cron/crawl
 // Triggered by Vercel Cron or an external cron job
@@ -15,6 +15,22 @@ export async function POST(request: Request) {
         }
 
         console.log('[Cron] Starting automated site crawls...');
+
+        // CLEANUP: Reset monitors that have been stuck in "CRAWLING" for more than 1 hour
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        const stuckMonitors = await (prisma as any).uptimeMonitor.updateMany({
+            where: {
+                status: 'CRAWLING',
+                updatedAt: { lt: oneHourAgo }
+            },
+            data: {
+                status: 'UNKNOWN',
+                crawlProgress: 0
+            }
+        });
+        if (stuckMonitors.count > 0) {
+            console.log(`[Cron] Reset ${stuckMonitors.count} monitors stuck in CRAWLING state.`);
+        }
 
         // Find all active monitors
         const monitors = await (prisma as any).uptimeMonitor.findMany({
@@ -47,18 +63,26 @@ export async function POST(request: Request) {
                 continue;
             }
 
+            if (monitor.status === 'CRAWLING') {
+                console.log(`[Cron] Skipping monitor ${monitor.id} (already crawling)`);
+                continue;
+            }
+
             try {
-                // Discover up to 1000 pages per site and check them
-                const crawlData = await performSiteCrawl(monitor.id, 1000);
-                if (crawlData) {
+                // Perform a full site crawl and analysis as requested by the user
+                // We use a reasonable maxPages limit for automated crawls
+                console.log(`[Cron] Starting full crawl for monitor ${monitor.id} (${monitor.name})`);
+                const res = await performSiteCrawl(monitor.id, 50);
+                if (res) {
                     results.push({
                         monitorId: monitor.id,
                         name: monitor.name,
-                        summary: crawlData.summary
+                        status: res.summary.down > 0 ? 'DOWN' : 'UP',
+                        pages: res.summary.total
                     });
                 }
             } catch (err: any) {
-                console.error(`[Cron] Error crawling monitor ${monitor.id}:`, err);
+                console.error(`[Cron] Error checking monitor ${monitor.id}:`, err);
                 errors.push({ monitorId: monitor.id, error: err.message });
             }
         }

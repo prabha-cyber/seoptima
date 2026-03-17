@@ -66,29 +66,39 @@ export async function GET() {
             })
         ]);
 
-        // Generate chart data dynamically (Mocking for structural demo)
-        const now = new Date();
-        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        // Generate chart data dynamically
+        const chartData = await Promise.all(
+            Array.from({ length: 7 }).map(async (_, i) => {
+                const dayStart = new Date();
+                dayStart.setHours(0, 0, 0, 0);
+                dayStart.setDate(dayStart.getDate() - (6 - i));
 
-        const dailyUsers = Array.from({ length: 7 }).map((_, i) => ({
-            name: days[(now.getDay() - 6 + i + 7) % 7],
-            value: Math.floor(Math.random() * 50) + 10
-        }));
+                const dayEnd = new Date(dayStart);
+                dayEnd.setHours(23, 59, 59, 999);
 
-        const websiteActivity = Array.from({ length: 7 }).map((_, i) => ({
-            name: days[(now.getDay() - 6 + i + 7) % 7],
-            value: Math.floor(Math.random() * 20) + 5
-        }));
+                const dayLabel = dayStart.toLocaleDateString('en-US', { weekday: 'short' });
 
-        const seoAudits = Array.from({ length: 7 }).map((_, i) => ({
-            name: days[(now.getDay() - 6 + i + 7) % 7],
-            value: Math.floor(Math.random() * 80) + 20
-        }));
+                const [usersCount, websitesCount, auditsCount, usageCount] = await Promise.all([
+                    prisma.user.count({ where: { createdAt: { gte: dayStart, lte: dayEnd } } }),
+                    prisma.website.count({ where: { createdAt: { gte: dayStart, lte: dayEnd } } }),
+                    prisma.seoReport.count({ where: { createdAt: { gte: dayStart, lte: dayEnd } } }),
+                    prisma.apiUsage.count({ where: { createdAt: { gte: dayStart, lte: dayEnd } } }),
+                ]);
 
-        const apiUsage = Array.from({ length: 7 }).map((_, i) => ({
-            name: days[(now.getDay() - 6 + i + 7) % 7],
-            value: Math.floor(Math.random() * 1500) + 500
-        }));
+                return {
+                    name: dayLabel,
+                    users: usersCount,
+                    websites: websitesCount,
+                    audits: auditsCount,
+                    usage: usageCount
+                };
+            })
+        );
+
+        const dailyUsers = chartData.map(d => ({ name: d.name, value: d.users }));
+        const websiteActivity = chartData.map(d => ({ name: d.name, value: d.websites }));
+        const seoAudits = chartData.map(d => ({ name: d.name, value: d.audits }));
+        const apiUsage = chartData.map(d => ({ name: d.name, value: d.usage }));
 
         const systemStatus = {
             api: 'Operational',

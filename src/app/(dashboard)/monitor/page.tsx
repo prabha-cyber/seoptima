@@ -148,6 +148,9 @@ export default function MonitorPage() {
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
     const [newInterval, setNewInterval] = useState(15);
     const [updatingIntervalId, setUpdatingIntervalId] = useState<string | null>(null);
+    const [newType, setNewType] = useState('HTTP');
+    const [responseTimeThreshold, setResponseTimeThreshold] = useState(5000);
+    const [newConfig, setNewConfig] = useState<any>({});
 
     // Crawl state
     const [crawlingId, setCrawlingId] = useState<string | null>(null);
@@ -187,7 +190,15 @@ export default function MonitorPage() {
             const res = await fetch('/api/monitor', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: newName.trim(), url: newUrl.trim(), email: newEmail.trim(), interval: newInterval }),
+                body: JSON.stringify({
+                    name: newName.trim(),
+                    url: newUrl.trim(),
+                    email: newEmail.trim(),
+                    interval: newInterval,
+                    type: newType,
+                    config: JSON.stringify(newConfig),
+                    responseTimeThreshold
+                }),
             });
             if (res.ok) { setNewName(''); setNewUrl(''); setNewEmail(''); setShowAddForm(false); await fetchMonitors(); }
         } finally { setIsAdding(false); }
@@ -282,9 +293,9 @@ export default function MonitorPage() {
                         <Activity className="w-6 h-6 text-emerald-400" />
                         Website Monitor
                     </h1>
-                    <p className="text-muted-foreground mt-1">
-                        Monitor every page of your website. We crawl, discover, and check all URLs automatically.
-                    </p>
+                    <div className="flex gap-4 mt-2">
+                        <button className="text-sm font-bold border-b-2 border-emerald-500 pb-1 text-emerald-400">Monitors</button>
+                    </div>
                 </div>
                 <div className="flex gap-2">
                     <button onClick={() => runCheck()} disabled={checkingAll || monitors.length === 0}
@@ -335,11 +346,21 @@ export default function MonitorPage() {
                                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand-500/50 transition-all" required />
                             </div>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                             <div>
-                                <label className="block text-xs text-muted-foreground mb-1.5 font-medium uppercase tracking-wider">Alert Emails (Optional)</label>
-                                <input type="text" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="e.g. alerts@mysite.com, dev@mysite.com"
-                                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand-500/50 transition-all" />
+                                <label className="block text-xs text-muted-foreground mb-1.5 font-medium uppercase tracking-wider">Monitor Type</label>
+                                <select value={newType} onChange={(e) => { setNewType(e.target.value); setNewConfig({}); }}
+                                    className="w-full px-4 py-3 bg-zinc-900 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500/50 transition-all">
+                                    <option value="HTTP">HTTP (Uptime & SEO)</option>
+                                    <option value="API">API (JSON & Headers)</option>
+                                    <option value="SSL">SSL / Certificate</option>
+                                    <option value="DNS">DNS Record</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs text-muted-foreground mb-1.5 font-medium uppercase tracking-wider">Alert Threshold (ms)</label>
+                                <input type="number" value={responseTimeThreshold} onChange={(e) => setResponseTimeThreshold(Number(e.target.value))}
+                                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500/50 transition-all" />
                             </div>
                             <div>
                                 <label className="block text-xs text-muted-foreground mb-1.5 font-medium uppercase tracking-wider">Check Interval</label>
@@ -348,12 +369,65 @@ export default function MonitorPage() {
                                     <option value={5}>Every 5 minutes</option>
                                     <option value={10}>Every 10 minutes</option>
                                     <option value={15}>Every 15 minutes</option>
-                                    <option value={20}>Every 20 minutes</option>
                                     <option value={30}>Every 30 minutes</option>
                                     <option value={60}>Every 60 minutes</option>
                                 </select>
                             </div>
                         </div>
+
+                        {/* Extra Config based on type */}
+                        <AnimatePresence>
+                            {newType === 'API' && (
+                                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="space-y-4 mb-4 pt-4 border-t border-white/5">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs text-muted-foreground mb-1.5 font-medium uppercase tracking-wider">Method</label>
+                                            <select value={newConfig.method || 'GET'} onChange={(e) => setNewConfig({ ...newConfig, method: e.target.value })}
+                                                className="w-full px-4 py-3 bg-zinc-900 border border-white/10 rounded-xl text-sm text-white">
+                                                <option value="GET">GET</option>
+                                                <option value="POST">POST</option>
+                                                <option value="PUT">PUT</option>
+                                                <option value="PATCH">PATCH</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs text-muted-foreground mb-1.5 font-medium uppercase tracking-wider">Expected JSON Search String</label>
+                                            <input type="text" value={newConfig.expectedJSON || ''} onChange={(e) => setNewConfig({ ...newConfig, expectedJSON: e.target.value })}
+                                                placeholder="e.g. success: true" className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-sm text-white" />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs text-muted-foreground mb-1.5 font-medium uppercase tracking-wider">Headers (JSON String)</label>
+                                        <textarea value={newConfig.headersStr || ''} onChange={(e) => {
+                                            const val = e.target.value;
+                                            setNewConfig({ ...newConfig, headersStr: val });
+                                            try { if (val) setNewConfig({ ...newConfig, headersStr: val, headers: JSON.parse(val) }); } catch (e) { }
+                                        }} placeholder='{"Authorization": "Bearer ..."}' className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-sm text-white h-20" />
+                                    </div>
+                                </motion.div>
+                            )}
+
+                            {newType === 'DNS' && (
+                                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 pt-4 border-t border-white/5">
+                                    <div>
+                                        <label className="block text-xs text-muted-foreground mb-1.5 font-medium uppercase tracking-wider">Record Type</label>
+                                        <select value={newConfig.recordType || 'A'} onChange={(e) => setNewConfig({ ...newConfig, recordType: e.target.value })}
+                                            className="w-full px-4 py-3 bg-zinc-900 border border-white/10 rounded-xl text-sm text-white">
+                                            <option value="A">A</option>
+                                            <option value="AAAA">AAAA</option>
+                                            <option value="MX">MX</option>
+                                            <option value="TXT">TXT</option>
+                                            <option value="CNAME">CNAME</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs text-muted-foreground mb-1.5 font-medium uppercase tracking-wider">Expected Value (Search String)</label>
+                                        <input type="text" value={newConfig.expectedValue || ''} onChange={(e) => setNewConfig({ ...newConfig, expectedValue: e.target.value })}
+                                            placeholder="e.g. 192.168.1.1" className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-sm text-white" />
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                         <p className="text-xs text-muted-foreground mb-4 italic">Note: After adding, we will automatically discover and monitor all internal pages.</p>
                         <div className="flex gap-2">
                             <button type="submit" disabled={isAdding} className="px-5 py-2.5 bg-gradient-to-r from-brand-500 to-brand-600 rounded-xl text-sm font-semibold text-white flex items-center gap-2 disabled:opacity-50">
@@ -399,6 +473,9 @@ export default function MonitorPage() {
                                                 <div className="flex items-center gap-3 flex-wrap">
                                                     <h3 className="font-bold text-lg text-white">{monitor.name}</h3>
                                                     <StatusBadge status={monitor.status} progress={monitor.crawlProgress} />
+                                                    <span className="text-[10px] font-bold uppercase bg-brand-500/5 text-brand-300 px-3 py-1 rounded-full border border-brand-500/10 tracking-widest">
+                                                        {monitor.type}
+                                                    </span>
                                                     {totalSubpages > 0 && (
                                                         <span className="text-[10px] font-bold uppercase bg-brand-500/10 text-brand-400 px-2 py-0.5 rounded-full border border-brand-500/20 flex items-center gap-1">
                                                             <Link2 className="w-3 h-3" /> {totalSubpages} pages

@@ -53,6 +53,32 @@ export default function DashboardPage() {
     const activeSiteFull = websites_full.find(w => w.id === activeWebsite?.id);
     const latestReport = activeSiteFull?.seoReports?.[0];
 
+    const toggleSiteStatus = async (siteId: string, currentStatus: string) => {
+        const newStatus = currentStatus === 'ACTIVE' ? 'DISABLED' : 'ACTIVE';
+        if (!confirm(`Are you sure you want to ${newStatus === 'ACTIVE' ? 'enable' : 'disable'} this website?`)) return;
+
+        try {
+            const res = await fetch(`/api/websites/${siteId}/status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus })
+            });
+
+            if (res.ok) {
+                // Update local state to reflect the change visually immediately
+                setWebsitesFull(websites_full.map(w => w.id === siteId ? { ...w, status: newStatus } : w));
+
+                // Also update the context if we have a way, or let it refresh on next load
+                // We'll just rely on the local state update for immediate feedback
+            } else {
+                const error = await res.json();
+                alert(error.error || 'Failed to update website status');
+            }
+        } catch (error) {
+            alert('Failed to update website status');
+        }
+    };
+
     const overallScore = analysisResult
         ? (() => {
             const totalChecks = Object.keys(analysisResult.results || {}).length;
@@ -299,15 +325,17 @@ export default function DashboardPage() {
                                 return (
                                     <div
                                         key={site.id}
-                                        onClick={() => setActiveWebsiteId(site.id)}
                                         className={cn(
-                                            "flex items-center justify-between p-4 rounded-xl border cursor-pointer transition-all",
+                                            "flex items-center justify-between p-4 rounded-xl border transition-all",
                                             isActive
                                                 ? "bg-brand-500/10 border-brand-500/30 ring-1 ring-brand-500/20"
                                                 : "bg-white/4 border-white/8 hover:bg-white/6"
                                         )}
                                     >
-                                        <div className="flex items-center gap-4">
+                                        <div
+                                            className="flex items-center gap-4 cursor-pointer flex-1"
+                                            onClick={() => setActiveWebsiteId(site.id)}
+                                        >
                                             <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", isActive ? "bg-brand-500/30" : "bg-brand-500/20")}>
                                                 <Globe className={cn("w-5 h-5", isActive ? "text-brand-300" : "text-brand-400")} />
                                             </div>
@@ -331,6 +359,30 @@ export default function DashboardPage() {
                                                     {isActive && analysisResult ? overallScore : score}
                                                 </div>
                                             )}
+
+                                            <div className="h-4 w-px bg-white/10 mx-1" />
+
+                                            {/* Persistent Toggle */}
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation(); // Prevent row click
+                                                    toggleSiteStatus(site.id, site.status || 'ACTIVE');
+                                                }}
+                                                className={cn(
+                                                    "relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 focus:ring-offset-background",
+                                                    (site.status || 'ACTIVE') === 'ACTIVE' ? 'bg-green-500' : 'bg-white/20'
+                                                )}
+                                                title={(site.status || 'ACTIVE') === 'ACTIVE' ? 'Disable Website' : 'Enable Website'}
+                                            >
+                                                <span className="sr-only">Toggle status</span>
+                                                <span
+                                                    aria-hidden="true"
+                                                    className={cn(
+                                                        "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                                                        (site.status || 'ACTIVE') === 'ACTIVE' ? 'translate-x-4' : 'translate-x-0'
+                                                    )}
+                                                />
+                                            </button>
                                         </div>
                                     </div>
                                 );

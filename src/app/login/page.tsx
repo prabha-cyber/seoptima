@@ -20,17 +20,25 @@ export default function LoginPage() {
         setIsLoading(true);
         setError('');
 
-        const result = await signIn('credentials', {
-            email,
-            password,
-            redirect: false,
-        });
+        try {
+            const result = await signIn('credentials', {
+                email,
+                password,
+                redirect: false,
+            });
 
-        if (result?.error) {
-            setError('Invalid email or password');
+            if (result?.error) {
+                setError('Invalid email or password');
+            } else if (result?.ok) {
+                router.push('/dashboard');
+            } else {
+                setError('An unexpected error occurred. Please try again.');
+            }
+        } catch (err: any) {
+            console.error('Login error:', err);
+            setError('Login failed. Please check your connection and try again.');
+        } finally {
             setIsLoading(false);
-        } else {
-            router.push('/dashboard');
         }
     }
 

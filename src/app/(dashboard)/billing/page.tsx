@@ -1,7 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Zap, Crown, Building2, Sparkles, ArrowRight } from 'lucide-react';
+import { Check, Zap, Crown, Building2, Sparkles, ArrowRight, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const plans = [
@@ -96,6 +97,36 @@ function TrendingUpIcon({ className }: { className?: string }) {
 }
 
 export default function BillingPage() {
+    const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+
+    const handleUpgrade = async (planId: string) => {
+        try {
+            setLoadingPlan(planId);
+            const response = await fetch('/api/stripe/checkout', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ planId }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to initiate checkout');
+            }
+
+            if (data.url) {
+                window.location.href = data.url;
+            }
+        } catch (error: any) {
+            console.error('Checkout error:', error);
+            alert(error.message || 'Something went wrong. Please try again.');
+        } finally {
+            setLoadingPlan(null);
+        }
+    };
+
     return (
         <div className="space-y-8 animate-fade-in">
             <div>
@@ -119,6 +150,8 @@ export default function BillingPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 {plans.map((plan, i) => {
                     const Icon = plan.icon;
+                    const isLoading = loadingPlan === plan.id;
+
                     return (
                         <motion.div
                             key={plan.id}
@@ -159,7 +192,8 @@ export default function BillingPage() {
                             </ul>
 
                             <button
-                                disabled={plan.current}
+                                onClick={() => handleUpgrade(plan.id)}
+                                disabled={plan.current || isLoading}
                                 className={cn(
                                     'mt-6 w-full py-2.5 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2',
                                     plan.current
@@ -169,8 +203,14 @@ export default function BillingPage() {
                                             : 'btn-secondary'
                                 )}
                             >
-                                {plan.cta}
-                                {!plan.current && <ArrowRight className="w-3.5 h-3.5" />}
+                                {isLoading ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                    <>
+                                        {plan.cta}
+                                        {!plan.current && <ArrowRight className="w-3.5 h-3.5" />}
+                                    </>
+                                )}
                             </button>
                         </motion.div>
                     );

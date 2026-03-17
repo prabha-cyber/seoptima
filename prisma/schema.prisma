@@ -15,6 +15,7 @@ model User {
   image         String?
   password      String?
   role          String         @default("USER")
+  status        String         @default("ACTIVE")
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   accounts      Account[]
@@ -27,8 +28,18 @@ model User {
   subscription  Subscription?
   websites      Website[]
   uptimeMonitors UptimeMonitor[]
+  statusPages    StatusPage[]
 
   @@map("users")
+}
+
+model FeatureFlag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  enabled   Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+
+  @@map("feature_flags")
 }
 
 model Account {
@@ -98,6 +109,7 @@ model Website {
   goal        String       @default("BLOG")
   builderMode String       @default("MANUAL")
   published   Boolean      @default(false)
+  status      String       @default("ACTIVE")
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   agencyId    String?
@@ -651,6 +663,7 @@ model UptimeMonitor {
   userId           String
   name             String
   url              String
+  type             String         @default("HTTP")
   interval         Int            @default(5)
   active           Boolean        @default(true)
   status           String         @default("UNKNOWN")
@@ -658,14 +671,36 @@ model UptimeMonitor {
   lastChecked      DateTime?
   lastStatus       Int?
   lastResponseTime Int?
+  config           String         @default("{}")
+  responseTimeThreshold Int?      @default(5000)
+  locations        String         @default("[\"Global\"]")
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   emails           MonitorEmail[]
   checks           UptimeCheck[]
   pages            MonitorPage[]
+  statusPages      StatusPage[]   @relation("StatusPageMonitors")
 
   @@map("uptime_monitors")
+}
+
+model StatusPage {
+  id          String          @id @default(cuid())
+  userId      String
+  name        String
+  slug        String          @unique
+  description String?
+  logo        String?
+  theme       String          @default("DARK")
+  isPublic    Boolean         @default(true)
+  active      Boolean         @default(true)
+  monitors    UptimeMonitor[] @relation("StatusPageMonitors")
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("status_pages")
 }
 
 model MonitorPage {
