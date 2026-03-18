@@ -46,23 +46,68 @@ Description: [Generated Description]`;
             let generatedTitle = '';
             let generatedDesc = '';
 
-            if (process.env.OPENAI_API_KEY) {
-                const completion = await openai.chat.completions.create({
-                    model: 'gpt-4o-mini',
-                    messages: [
-                        { role: 'system', content: 'You are an expert SEO specialist. Follow character limits strictly.' },
-                        { role: 'user', content: prompt }
-                    ],
-                    temperature: 0.7,
-                });
+            const apiKey = process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY;
 
-                const content = completion.choices[0]?.message?.content || '';
-                const lines = content.split('\n');
-                generatedTitle = lines.find(l => l.startsWith('Title:'))?.replace('Title:', '').trim() || '';
-                generatedDesc = lines.find(l => l.startsWith('Description:'))?.replace('Description:', '').trim() || '';
+            if (apiKey) {
+                try {
+                    // Use Gemini if configured, otherwise fallback to OpenAI
+                    if (process.env.GEMINI_API_KEY) {
+                        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
+                        const response = await fetch(apiUrl, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                contents: [{
+                                    parts: [{
+                                        text: `You are a professional SEO expert. 
+                                        Analyze this page content and URL to generate a high-performing SEO meta title and meta description.
+                                        
+                                        URL: ${page.url}
+                                        Current Title: ${page.title}
+                                        Current H1: ${page.h1}
+                                        Current Description: ${page.description}
+                                        
+                                        Goal: Extract and use high-search-volume keywords that are highly relevant to the actual content.
+                                        
+                                        Rules:
+                                        1. Meta Title: 50-60 characters. Must be catchy and keyword-rich.
+                                        2. Meta Description: 150-160 characters. Must include a clear call to action and natural keyword integration.
+                                        
+                                        Return ONLY a JSON object with "title" and "description" keys. Do not include markdown.`
+                                    }]
+                                }]
+                            })
+                        });
+
+                        const result = await response.json();
+                        const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                        const cleanText = text.replace(/```json|```/g, "").trim();
+                        const parsed = JSON.parse(cleanText);
+                        generatedTitle = parsed.title || '';
+                        generatedDesc = parsed.description || '';
+                    } else if (process.env.OPENAI_API_KEY) {
+                        const completion = await openai.chat.completions.create({
+                            model: 'gpt-4o-mini',
+                            messages: [
+                                { role: 'system', content: 'You are an expert SEO specialist. Follow character limits strictly.' },
+                                { role: 'user', content: prompt }
+                            ],
+                            temperature: 0.7,
+                        });
+
+                        const content = completion.choices[0]?.message?.content || '';
+                        const lines = content.split('\n');
+                        generatedTitle = lines.find(l => l.startsWith('Title:'))?.replace('Title:', '').trim() || '';
+                        generatedDesc = lines.find(l => l.startsWith('Description:'))?.replace('Description:', '').trim() || '';
+                    }
+                } catch (err) {
+                    console.error("AI Generation failed, using dummy fallback", err);
+                    generatedTitle = (page.title || `Optimized Title for ${page.url}`).substring(0, 60);
+                    generatedDesc = (page.description || `Optimized Meta Description for ${page.url}. Visit us for more information.`).substring(0, 160);
+                }
             } else {
-                generatedTitle = `[Demo] Optimized Title for ${page.url}`.substring(0, 60);
-                generatedDesc = `[Demo] Optimized Meta Description for ${page.url}. Visit us for more information and SEO tips.`.substring(0, 160);
+                generatedTitle = (page.title || `Optimized Title for ${page.url}`).substring(0, 60);
+                generatedDesc = (page.description || `Optimized Meta Description for ${page.url}. Visit us for more information.`).substring(0, 160);
             }
 
             return {
