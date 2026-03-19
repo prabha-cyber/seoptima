@@ -126,8 +126,10 @@ export async function POST(req: Request) {
 
         return NextResponse.json({
             url: normalizedUrl,
+            domain,
             timestamp: new Date().toISOString(),
             pages_count: Object.keys(results).length,
+            limit,
             results,
             raw_data: crawledPages, // DEBUG
             site_stats: {

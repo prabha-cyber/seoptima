@@ -28,6 +28,7 @@ const navItems = [
             { href: '/competitors', label: 'Competitors', icon: Users },
             { href: '/technical-seo', label: 'Technical SEO', icon: Settings },
             { href: '/meta-content', label: 'Meta Optimizer', icon: FileText },
+            { href: '/schema-generator', label: 'Schema Generator', icon: Zap },
             { href: '/website-integration', label: 'Website Integration', icon: Globe },
         ],
     },

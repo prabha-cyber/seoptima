@@ -40,3 +40,7 @@ next-env.d.ts
 venv/
 .venv/
 .env*.local
+dev_output.log
+vercel_out.txt
+wp-seo-optimizer/
+env

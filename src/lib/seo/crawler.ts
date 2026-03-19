@@ -36,6 +36,17 @@ export class Crawler {
         return this.robots.isAllowed(url, 'AntigravityCrawler');
     }
 
+    private normalizeUrlForVisited(url: string): string {
+        try {
+            const u = new URL(url);
+            const host = u.hostname.replace(/^www\./, '');
+            const path = u.pathname.replace(/\/+$/, '') || '/';
+            return `${u.protocol}//${host}${u.port ? ':' + u.port : ''}${path}`;
+        } catch (e) {
+            return url;
+        }
+    }
+
     async crawl(startUrl: string): Promise<Record<string, CrawlResult>> {
         const results: Record<string, CrawlResult> = {};
 
@@ -59,17 +70,20 @@ export class Crawler {
             normalizedUrl = finalUrl.toString();
 
             console.log(`Base domain established: ${this.domain} from ${normalizedUrl}`);
-        } catch (e) {
-            console.error('Initial connection failed:', normalizedUrl);
+        } catch (e: any) {
+            console.error('Initial connection failed:', normalizedUrl, e.message);
             return {};
         }
 
+        const initialNormalized = this.normalizeUrlForVisited(normalizedUrl);
         this.queue.push(normalizedUrl);
         await this.fetchRobots(normalizedUrl);
 
         while (this.queue.length > 0 && this.visited.size < this.maxPages) {
             const url = this.queue.shift()!;
-            if (this.visited.has(url)) continue;
+            const normalizedForVisited = this.normalizeUrlForVisited(url);
+
+            if (this.visited.has(normalizedForVisited)) continue;
 
             if (!this.isAllowed(url)) {
                 console.log(`Blocked by robots.txt: ${url}`);
@@ -77,8 +91,8 @@ export class Crawler {
             }
 
             try {
-                this.visited.add(url);
-                console.log(`[Crawler] Processing queue item: ${url}`);
+                this.visited.add(normalizedForVisited);
+                console.log(`[Crawler] Processing queue item: ${url} (Normalized: ${normalizedForVisited})`);
 
                 const { html, status, url: effectiveUrl, error: fetchError } = await robustFetch(url);
                 console.log(`[Crawler] Queue item fetch result: ${url} -> status ${status}, html length ${html?.length}`);
@@ -98,12 +112,15 @@ export class Crawler {
 
                     try {
                         const absoluteUrl = new URL(href, effectiveUrl);
-                        const cleanUrl = `${absoluteUrl.protocol}//${absoluteUrl.host}${absoluteUrl.pathname}`;
-
                         const targetHost = absoluteUrl.hostname.replace(/^www\./, '');
 
-                        if (targetHost === this.domain && !this.visited.has(cleanUrl)) {
-                            this.queue.push(cleanUrl);
+                        if (targetHost === this.domain) {
+                            const cleanUrl = `${absoluteUrl.protocol}//${absoluteUrl.host}${absoluteUrl.pathname}`;
+                            const normalizedTarget = this.normalizeUrlForVisited(cleanUrl);
+
+                            if (!this.visited.has(normalizedTarget)) {
+                                this.queue.push(cleanUrl);
+                            }
                         }
                     } catch (e) {
                         // Invalid URL

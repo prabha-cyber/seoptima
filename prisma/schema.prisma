@@ -122,6 +122,7 @@ model Website {
   products    Product[]
   redirects   Redirect[]
   seoReports  SeoReport[]
+  aiSchemas   AiSchema[]
   agency      Agency?      @relation("AgencyToWebsite", fields: [agencyId], references: [id])
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -745,4 +746,22 @@ model UptimeCheck {
 
   @@index([monitorId, checkedAt])
   @@map("uptime_checks")
+}
+
+model AiSchema {
+  id              String   @id @default(cuid())
+  websiteId       String?
+  url             String
+  pageType        String?  // HOMEPAGE, PRODUCT, SERVICE, BLOG, CATEGORY, REAL_ESTATE, LOCAL_BUSINESS, etc.
+  schemaType      String?  // Organization, Product, Service, FAQ, etc.
+  generatedSchema Json     // The JSON-LD content
+  optimizedFor    String[] // ["SEO", "AEO", "GEO", "SXO"]
+  status          String   @default("GENERATED") // GENERATED, EDITED, APPLIED
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  website         Website? @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  @@index([websiteId])
+  @@index([url])
+  @@map("ai_schemas")
 }

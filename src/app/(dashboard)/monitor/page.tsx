@@ -80,6 +80,7 @@ interface Monitor {
     id: string;
     name: string;
     url: string;
+    type: string;
     interval: number;
     active: boolean;
     status: string;
